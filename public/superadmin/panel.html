@@ -3,81 +3,113 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Super Admin Panel — Bar Council Portal</title>
+<title>Super Admin Panel — Bar Council UP</title>
 <link rel="stylesheet" href="/css/superadmin.css">
 </head>
-<body>
+<body class="sa-body">
 
 <div class="sa-shell">
+
   <!-- Sidebar -->
   <aside class="sa-sidebar" id="saSidebar">
     <div class="sa-sidebar-brand">
-      <img src="/image/BarCouncil.png" alt="Bar Council">
-      <div class="b-text">
-        <h3>Super Admin</h3>
-        <p>Elevated Access Panel</p>
+      <img src="/image/BarCouncil.png" alt="Logo" onerror="this.style.display='none'">
+      <div>
+        <div class="sa-brand-title">Super Admin</div>
+        <div class="sa-brand-sub">Bar Council UP</div>
       </div>
     </div>
 
-    <nav class="sa-nav" id="saNav">
-      <div class="sa-nav-section">
-        <p class="sa-nav-label">Overview</p>
-        <button class="sa-nav-item active" data-section="overview"><span class="nav-icon">◈</span> Dashboard</button>
+    <nav id="saNav" class="sa-nav">
+      <div class="sa-nav-group">
+        <div class="sa-nav-label">Overview</div>
+        <button class="sa-nav-btn active" data-section="overview">
+          <span class="sa-nav-icon">▣</span> Dashboard
+        </button>
       </div>
-      <div class="sa-nav-section">
-        <p class="sa-nav-label">Management</p>
-        <button class="sa-nav-item" data-section="users"><span class="nav-icon">👤</span> User Management</button>
-        <button class="sa-nav-item" data-section="applications"><span class="nav-icon">📋</span> Applications</button>
-        <button class="sa-nav-item" data-section="certificates"><span class="nav-icon">📜</span> Certificates</button>
-        <button class="sa-nav-item" data-section="notices"><span class="nav-icon">📢</span> Notices</button>
-        <button class="sa-nav-item" data-section="objections"><span class="nav-icon">⚠️</span> Objections</button>
+      <div class="sa-nav-group">
+        <div class="sa-nav-label">Management</div>
+        <button class="sa-nav-btn" data-section="users">
+          <span class="sa-nav-icon">👤</span> Users
+        </button>
+        <button class="sa-nav-btn" data-section="applications">
+          <span class="sa-nav-icon">📋</span> Applications
+        </button>
+        <button class="sa-nav-btn" data-section="certificates">
+          <span class="sa-nav-icon">📜</span> Certificates
+        </button>
+        <button class="sa-nav-btn" data-section="notices">
+          <span class="sa-nav-icon">📢</span> Notices
+        </button>
+        <button class="sa-nav-btn" data-section="objections">
+          <span class="sa-nav-icon">⚠️</span> Objections
+        </button>
       </div>
-      <div class="sa-nav-section">
-        <p class="sa-nav-label">Operations</p>
-        <button class="sa-nav-item" data-section="uploads"><span class="nav-icon">📤</span> Uploads</button>
-        <button class="sa-nav-item" data-section="backups"><span class="nav-icon">💾</span> Backups</button>
+      <div class="sa-nav-group">
+        <div class="sa-nav-label">Operations</div>
+        <button class="sa-nav-btn" data-section="uploads">
+          <span class="sa-nav-icon">📤</span> Uploads
+        </button>
+        <button class="sa-nav-btn" data-section="backups">
+          <span class="sa-nav-icon">💾</span> Backups
+        </button>
       </div>
-      <div class="sa-nav-section">
-        <p class="sa-nav-label">Security & Audit</p>
-        <button class="sa-nav-item" data-section="audit"><span class="nav-icon">📒</span> Audit Logs</button>
-        <button class="sa-nav-item" data-section="sa-activity"><span class="nav-icon">🔐</span> SA Activity</button>
-        <button class="sa-nav-item" data-section="login-attempts"><span class="nav-icon">🛡️</span> Login Attempts</button>
-        <button class="sa-nav-item" data-section="security"><span class="nav-icon">🔍</span> Security Monitor</button>
+      <div class="sa-nav-group">
+        <div class="sa-nav-label">Security & Audit</div>
+        <button class="sa-nav-btn" data-section="audit">
+          <span class="sa-nav-icon">📒</span> Audit Logs
+        </button>
+        <button class="sa-nav-btn" data-section="sa-activity">
+          <span class="sa-nav-icon">🔐</span> SA Activity
+        </button>
+        <button class="sa-nav-btn" data-section="login-attempts">
+          <span class="sa-nav-icon">🛡️</span> Login Attempts
+        </button>
+        <button class="sa-nav-btn" data-section="security">
+          <span class="sa-nav-icon">🔍</span> Security Monitor
+        </button>
       </div>
-      <div class="sa-nav-section">
-        <p class="sa-nav-label">System</p>
-        <button class="sa-nav-item" data-section="system"><span class="nav-icon">🖥️</span> System Monitor</button>
-        <button class="sa-nav-item" data-section="env"><span class="nav-icon">⚙️</span> Env Config</button>
+      <div class="sa-nav-group">
+        <div class="sa-nav-label">System</div>
+        <button class="sa-nav-btn" data-section="system">
+          <span class="sa-nav-icon">🖥️</span> System Info
+        </button>
+        <button class="sa-nav-btn" data-section="env">
+          <span class="sa-nav-icon">⚙️</span> Env Config
+        </button>
       </div>
     </nav>
 
-    <div class="sa-sidebar-footer">
-      <div class="sa-user-info" id="saUserInfo">Loading…</div>
-      <button class="sa-logout-btn" id="saLogoutBtn">Logout</button>
+    <div class="sa-sidebar-foot">
+      <div class="sa-user-pill" id="saUserInfo">Loading…</div>
+      <div class="sa-session-row" id="sessionTimer">Session active</div>
+      <button class="sa-logout-btn" id="saLogoutBtn">⏻ Sign Out</button>
     </div>
   </aside>
 
   <!-- Main -->
-  <main class="sa-main">
-    <header class="sa-header">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <button id="mobileSidebarToggle" style="display:none;background:transparent;border:1px solid #334155;border-radius:5px;color:#f1f5f9;padding:6px 10px;">☰</button>
+  <div class="sa-main">
+    <header class="sa-topbar">
+      <div class="sa-topbar-left">
+        <button class="sa-menu-btn" id="mobileSidebarToggle">☰</button>
         <div>
-          <p style="font-size:11px;color:#94a3b8;margin-bottom:2px;">Super Admin Portal / <span id="sectionLabel">Dashboard</span></p>
-          <h2 id="sectionTitle">Dashboard</h2>
+          <div class="sa-breadcrumb">Super Admin / <span id="sectionLabel">Dashboard</span></div>
+          <h1 class="sa-page-title" id="sectionTitle">Dashboard</h1>
         </div>
       </div>
-      <div class="sa-session-info">
-        <span id="sessionTimer">Session: active</span>
+      <div class="sa-topbar-right">
+        <span class="sa-online-dot"></span>
+        <span style="font-size:12px;color:#64748b">Live</span>
       </div>
     </header>
 
-    <section class="sa-content" id="saContent">
-      <div class="sa-loading"><span class="sa-spinner"></span> Loading…</div>
-    </section>
-  </main>
+    <div class="sa-content" id="saContent">
+      <div class="sa-spinner-wrap"><span class="sa-spin"></span></div>
+    </div>
+  </div>
 </div>
 
+<!-- Toast -->
 <div class="sa-toast" id="saToast"></div>
 
 <script src="/js/superadmin-panel.js"></script>
