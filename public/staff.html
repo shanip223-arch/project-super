@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Portal - Bar Council</title>
+<link rel="stylesheet" href="/css/staff.css">
+<link rel="stylesheet" href="/css/workflow-modal.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <h2>
+      <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      Staff
+    </h2>
+    <p>Application Processing Unit</p>
+  </div>
+  <nav id="staffNav">
+    <!-- Populated by JS, but we will style the logout below -->
+  </nav>
+  <a class="nav-item logout" onclick="logout()">
+    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+    Secure Logout
+  </a>
+</aside>
+
+<main class="main-content">
+  <header class="topbar">
+    <h1 id="pageTitle">Staff Dashboard</h1>
+    <div class="user-info">
+      <span id="userName">Staff Member</span>
+      <span class="badge" id="roleBadge">PROCESSING AGENT</span>
+    </div>
+  </header>
+  <div class="content" id="content">Loading workspace...</div>
+</main>
+
+<div id="loader" class="loader" style="display:none"><div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="/js/workflow-modal.js"></script>
+<script src="/js/staff.js"></script>
+</body>
+</html>

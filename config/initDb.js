@@ -1,0 +1,192 @@
+const bcrypt = require('bcryptjs');
+
+async function initDatabase() {
+  const pool = require('./db');
+
+  // Users table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT,
+      role TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Applications table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS applications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      application_no TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      father_name TEXT,
+      district TEXT,
+      mobile TEXT,
+      status TEXT DEFAULT 'pending',
+      upload_enabled INTEGER DEFAULT 1,
+      final_chance INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Certificates
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS certificates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      application_no TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      uploaded_by INTEGER,
+      status TEXT DEFAULT 'pending',
+      remarks TEXT,
+      uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Uploads (excel batches)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uploads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      filename TEXT,
+      uploaded_by INTEGER,
+      total_rows INTEGER DEFAULT 0,
+      inserted_rows INTEGER DEFAULT 0,
+      error_rows INTEGER DEFAULT 0,
+      skipped_rows INTEGER DEFAULT 0,
+      error_log TEXT,
+      uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Objections
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS objections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      application_no TEXT NOT NULL,
+      reason TEXT,
+      required_docs TEXT,
+      cleared_files TEXT,
+      status TEXT DEFAULT 'open',
+      remarks TEXT,
+      handled_by INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      resolved_at DATETIME NULL
+    )
+  `);
+
+  // Migrations for existing objections table
+  try { await pool.query("ALTER TABLE objections ADD COLUMN required_docs TEXT"); } catch(e) {}
+  try { await pool.query("ALTER TABLE objections ADD COLUMN cleared_files TEXT"); } catch(e) {}
+
+  // Duplicate requests
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      application_no TEXT NOT NULL,
+      reason TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // OTP codes
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS otp_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      application_no TEXT NOT NULL,
+      otp TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Action logs
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS action_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      role TEXT,
+      action TEXT,
+      details TEXT,
+      ip_address TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Backup logs
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS backup_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      filename TEXT,
+      size_kb INTEGER,
+      type TEXT DEFAULT 'manual',
+      status TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Notices
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT,
+      file_path TEXT,
+      target_audience TEXT DEFAULT 'public',
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Run a migration to add file_path if it doesn't exist (since DB is already created)
+  try {
+    await pool.query("ALTER TABLE notices ADD COLUMN file_path TEXT");
+  } catch (err) {}
+  
+  try {
+    await pool.query("ALTER TABLE notices ADD COLUMN target_audience TEXT DEFAULT 'public'");
+  } catch (err) {}
+
+  // Seed default admin
+  const [admins] = await pool.query("SELECT id FROM users WHERE role='admin' LIMIT 1");
+  if (admins.length === 0) {
+    const hashed = await bcrypt.hash('admin123', 10);
+    await pool.query(
+      "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+      ['admin', hashed, 'System Administrator', 'admin']
+    );
+    console.log('✅ Default admin created → username: admin, password: admin123');
+  }
+
+  // Seed default staff
+  const [uploadStaff] = await pool.query("SELECT id FROM users WHERE username='staff' LIMIT 1");
+  if (uploadStaff.length === 0) {
+    const hashed = await bcrypt.hash('staff123', 10);
+    await pool.query(
+      "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+      ['staff', hashed, 'Upload Staff', 'upload_staff']
+    );
+    console.log('✅ Default upload staff created → username: staff, password: staff123');
+  }
+
+  const [objectionStaff] = await pool.query("SELECT id FROM users WHERE username='objection_staff' LIMIT 1");
+  if (objectionStaff.length === 0) {
+    const hashed = await bcrypt.hash('staff123', 10);
+    await pool.query(
+      "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+      ['objection_staff', hashed, 'Objection Staff', 'objection_staff']
+    );
+    console.log('✅ Default objection staff created → username: objection_staff, password: staff123');
+  }
+
+  // Notices are not seeded automatically; office notices must be created by authorized users.
+
+
+  console.log('✅ Database initialized successfully using SQLite');
+}
+
+module.exports = { initDatabase };

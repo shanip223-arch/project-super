@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Office Panel - Bar Council Management Portal</title>
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body data-admin-page="objections">
+<div class="app-shell" id="appShell">
+  <aside class="sidebar" aria-label="Admin office navigation">
+    <div class="brand">
+      <img src="/image/BarCouncil.png" alt="Bar Council emblem">
+      <div>
+        <h1>Bar Council Portal</h1>
+        <p>Admin / Office Panel</p>
+      </div>
+    </div>
+    <nav class="nav-list" id="sidebarMenu" aria-label="Main office menu"></nav>
+    <div class="sidebar-footer">
+      <button class="collapse-btn" type="button" id="collapseSidebar">Collapse</button>
+      <small>Permanent ID format: UP12345/25</small>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="top-header">
+      <div class="header-left">
+        <button class="mobile-menu" type="button" id="mobileMenu" aria-label="Open menu">☰</button>
+        <div>
+          <p class="breadcrumb">Admin Portal / <span id="activeSectionLabel">Dashboard</span></p>
+          <h2 id="pageTitle">Dashboard</h2>
+        </div>
+      </div>
+      <div class="header-right" aria-label="Top right operational area">
+        <label class="global-search">
+          <span>Search</span>
+          <input type="search" id="globalSearch" placeholder="UP12345/25, name, district">
+        </label>
+        <button class="notification-btn" type="button" id="notificationButton">Notifications</button>
+        <nav class="top-nav" id="topNav" aria-label="Operational shortcuts"></nav>
+        <div class="profile-menu">
+          <button class="profile-trigger" type="button" id="profileTrigger" aria-haspopup="true" aria-expanded="false">
+            <span class="profile-initials">AD</span>
+            <span class="profile-copy"><strong>System Administrator</strong><em>System Admin</em></span>
+          </button>
+          <div class="profile-dropdown" id="profileDropdown" role="menu">
+            <a href="/admin/settings.html#profile" role="menuitem">Profile</a>
+            <a href="/admin/settings.html" role="menuitem">Settings</a>
+            <a href="/admin/settings.html#change-password" role="menuitem">Change Password</a>
+            <button type="button" data-logout role="menuitem">Logout</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="page-shell" id="pageContent" aria-live="polite"></section>
+  </main>
+</div>
+<div class="overlay" id="overlay"></div>
+<script src="/js/admin.js"></script>
+</body>
+</html>

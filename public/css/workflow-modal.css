@@ -1,0 +1,104 @@
+.workflow-modal-open { overflow: hidden; }
+.workflow-background-locked { pointer-events: none; user-select: none; }
+.workflow-modal-open .main-content,
+.workflow-modal-open .sidebar { filter: blur(3px) saturate(0.75); }
+
+.workflow-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.18), transparent 28%),
+    linear-gradient(135deg, rgba(2, 6, 23, 0.76), rgba(15, 23, 42, 0.88));
+  backdrop-filter: blur(14px);
+  animation: workflowFadeIn 180ms ease-out;
+}
+
+.workflow-modal-card {
+  position: relative;
+  width: min(980px, 100%);
+  max-height: min(90vh, 880px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 30px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94));
+  box-shadow: 0 32px 90px rgba(2, 6, 23, 0.5), inset 0 1px 0 rgba(255,255,255,0.9);
+  animation: workflowPopIn 260ms cubic-bezier(.2,.8,.2,1);
+}
+
+.workflow-modal-glow {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 7px;
+  background: linear-gradient(90deg, #f97316, #ef4444);
+}
+.workflow-overlay--review .workflow-modal-glow { background: linear-gradient(90deg, #2563eb, #06b6d4); }
+.workflow-overlay--success .workflow-modal-glow { background: linear-gradient(90deg, #059669, #22c55e); }
+.workflow-overlay--notice .workflow-modal-glow { background: linear-gradient(90deg, #4f46e5, #7c3aed); }
+
+.workflow-modal-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 30px 34px 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+.workflow-modal-icon {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  font-size: 30px;
+  background: #fff7ed;
+  box-shadow: inset 0 0 0 1px #fed7aa, 0 14px 28px rgba(249,115,22,.18);
+}
+.workflow-overlay--review .workflow-modal-icon { background: #eff6ff; box-shadow: inset 0 0 0 1px #bfdbfe, 0 14px 28px rgba(37,99,235,.16); }
+.workflow-overlay--success .workflow-modal-icon { background: #ecfdf5; box-shadow: inset 0 0 0 1px #bbf7d0, 0 14px 28px rgba(5,150,105,.16); }
+.workflow-eyebrow { color: #64748b; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 6px; }
+.workflow-modal-header h2 { margin: 0; color: #0f172a; font-size: clamp(22px, 3vw, 32px); letter-spacing: -0.04em; }
+.workflow-subtitle { color: #64748b; margin-top: 6px; font-size: 14px; }
+.workflow-lock-pill { padding: 8px 12px; border-radius: 999px; background: #fee2e2; color: #991b1b; font-size: 12px; font-weight: 800; }
+.workflow-close { width: 38px; height: 38px; border: 0; border-radius: 999px; background: #e2e8f0; cursor: pointer; color: #334155; font-size: 22px; }
+.workflow-modal-body { padding: 26px 34px 32px; max-height: calc(90vh - 140px); overflow-y: auto; }
+.workflow-modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 18px 34px 28px; border-top: 1px solid rgba(148, 163, 184, 0.22); background: rgba(248,250,252,.82); }
+.workflow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.workflow-field { border: 1px solid #e2e8f0; background: rgba(248,250,252,.86); border-radius: 16px; padding: 14px; }
+.workflow-field label { display: block; color: #64748b; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+.workflow-field strong, .workflow-field span { color: #0f172a; font-size: 14px; word-break: break-word; }
+.workflow-section { margin-top: 18px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 18px; background: #fff; }
+.workflow-section h4 { color: #0f172a; margin-bottom: 12px; font-size: 15px; }
+.workflow-doc-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.workflow-doc-tag { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; border-radius: 999px; padding: 7px 11px; font-size: 12px; font-weight: 800; }
+.workflow-upload-row { display: grid; grid-template-columns: 1fr; gap: 7px; margin-bottom: 12px; }
+.workflow-upload-row label { color: #334155; font-size: 13px; font-weight: 800; }
+.workflow-note { color: #64748b; font-size: 13px; line-height: 1.55; }
+.workflow-history { display: grid; gap: 10px; }
+.workflow-history-item { border-left: 4px solid #3b82f6; background: #eff6ff; border-radius: 12px; padding: 12px 14px; color: #1e3a8a; font-size: 13px; }
+.workflow-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+@keyframes workflowFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes workflowPopIn { from { opacity: 0; transform: translateY(20px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (max-width: 760px) {
+  .workflow-overlay { padding: 12px; align-items: stretch; }
+  .workflow-modal-card { border-radius: 22px; max-height: 100%; }
+  .workflow-modal-header { grid-template-columns: 1fr; padding: 24px 20px 18px; }
+  .workflow-lock-pill { justify-self: start; }
+  .workflow-modal-body { padding: 20px; max-height: calc(100vh - 156px); }
+  .workflow-grid { grid-template-columns: 1fr; }
+  .workflow-modal-footer { padding: 16px 20px 22px; flex-direction: column; }
+  .workflow-modal-footer .btn { width: 100%; }
+}
+.nav-item.disabled { opacity: .45; cursor: not-allowed; }
+.workflow-critical-lock .content input,
+.workflow-critical-lock .content select,
+.workflow-critical-lock .content textarea,
+.workflow-critical-lock .content button { pointer-events: none; }
+.tag.objection, .tag.objection_pending, .tag.objection_reupload_required { background: rgba(249, 115, 22, 0.12); color: #c2410c; }
+.tag.objection_under_review { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }

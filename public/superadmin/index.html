@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bar Council Portal</title>
+<link rel="stylesheet" href="/css/superadmin.css">
+<style>
+  body { background: #0f172a; }
+  .blank-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: #1e293b; user-select: none; }
+  .blank-page p { font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="blank-page" id="blankPage">
+  <p>&nbsp;</p>
+</div>
+
+<div class="sa-login-page" id="loginPage" style="display:none;">
+  <div class="sa-login-box">
+    <div class="sa-login-logo">
+      <img src="/image/BarCouncil.png" alt="Bar Council">
+      <div class="brand-text">
+        <h2>Bar Council of Uttar Pradesh</h2>
+        <p>Secure Portal Access</p>
+      </div>
+    </div>
+
+    <div class="sa-badge">⬡ Elevated Access Mode</div>
+
+    <div class="sa-step active" id="step1">
+      <h2 class="sa-login-title">Access Verification</h2>
+      <p class="sa-login-sub">Enter your Passkey ID to continue.</p>
+
+      <div class="sa-field">
+        <label>Passkey ID</label>
+        <input type="text" id="passkeyInput" placeholder="Enter Passkey ID" autocomplete="off" spellcheck="false">
+        <span class="sa-hint">Your assigned credential identifier</span>
+      </div>
+
+      <hr class="sa-divider">
+      <p class="sa-shortcut-hint">Use keyboard activation to reveal password field</p>
+    </div>
+
+    <div class="sa-step" id="step2">
+      <h2 class="sa-login-title">Password Verification</h2>
+      <p class="sa-login-sub">Enter your secure access password.</p>
+
+      <div class="sa-field">
+        <label>Passkey ID</label>
+        <input type="text" id="passkeyConfirm" disabled>
+      </div>
+      <div class="sa-field">
+        <label>Password</label>
+        <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="off">
+      </div>
+
+      <button class="sa-btn" id="loginBtn" type="button">Authenticate</button>
+    </div>
+
+    <div class="sa-msg" id="loginMsg"></div>
+  </div>
+</div>
+
+<script src="/js/superadmin-login.js"></script>
+</body>
+</html>

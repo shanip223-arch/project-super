@@ -1,0 +1,119 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const path = require('path');
+const fs = require('fs');
+const cron = require('node-cron');
+
+const { initDatabase } = require('./config/initDb');
+const { initSuperAdminDb } = require('./config/initSuperAdminDb');
+const { runBackup } = require('./utils/backup');
+
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
+const staffRoutes = require('./routes/staff');
+const candidateRoutes = require('./routes/candidate');
+const certificateRoutes = require('./routes/certificate');
+const objectionRoutes = require('./routes/objection');
+const superadminRoutes = require('./routes/superadmin');
+
+const app = express();
+
+// Create required directories
+const dirs = ['uploads/temp', 'uploads/verified', 'uploads/certificates', 'uploads/objection_docs', 'backups'];
+dirs.forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
+// Middleware
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Super Admin hidden routes — declared BEFORE static middleware so the
+// public/superadmin/ directory never causes a static redirect to /superadmin/
+app.get('/superadmin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'superadmin', 'index.html')));
+app.get('/superadmin/panel', (req, res) => res.sendFile(path.join(__dirname, 'public', 'superadmin', 'panel.html')));
+
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/image', express.static(path.join(__dirname, 'public', 'image')));
+app.use('/images', express.static(path.join(__dirname, 'public', 'image')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/candidate', candidateRoutes);
+app.use('/api/certificate', certificateRoutes);
+app.use('/api/objection', objectionRoutes);
+app.use('/api/superadmin', superadminRoutes);
+
+// Frontend routes
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/admin', (req, res) => res.redirect('/admin/dashboard.html'));
+app.get('/admin/:page', (req, res, next) => {
+  const allowedPages = new Set([
+    'dashboard.html',
+    'applications.html',
+    'cop.html',
+    'renewals.html',
+    'reissue.html',
+    'verification.html',
+    'objections.html',
+    'imports.html',
+    'certificates.html',
+    'staff.html',
+    'reports.html',
+    'settings.html',
+    'audit_logs.html'
+  ]);
+  if (!allowedPages.has(req.params.page)) return next();
+  res.sendFile(path.join(__dirname, 'public', 'admin', req.params.page));
+});
+app.get('/staff', (req, res) => res.sendFile(path.join(__dirname, 'public', 'staff.html')));
+app.get('/candidate', (req, res) => res.sendFile(path.join(__dirname, 'public', 'candidate.html')));
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ success: false, message: err.message || 'Server error' });
+});
+
+// Validate required environment variables before startup
+const requiredEnv = ['DB_HOST', 'DB_USER', 'DB_NAME', 'JWT_SECRET'];
+const missingEnv = requiredEnv.filter(key => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnv.join(', '));
+  process.exit(1);
+}
+if (process.env.DB_PASSWORD === 'yourpassword') {
+  console.warn('⚠️  DB_PASSWORD is still set to the placeholder value. Update .env with your MySQL password or leave it blank if no password is used.');
+}
+
+// Initialize DB and start server
+const PORT = process.env.PORT || 5000;
+initDatabase().then(() => initSuperAdminDb()).then(() => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Bar Council Portal running on http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', err => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use. Stop the process using that port or set a different PORT in .env.`);
+      process.exit(1);
+    }
+    throw err;
+  });
+
+  // Daily backup at 2 AM
+  cron.schedule('0 2 * * *', () => {
+    console.log('Running daily backup...');
+    runBackup();
+  });
+}).catch(err => {
+  console.error('❌ DB Init failed:', err);
+  process.exit(1);
+});
