@@ -1,0 +1,110 @@
+Upgrade the existing hidden Super Admin system into a Dynamic System Control Center without breaking or modifying the current project structure, workflows, routes, modules, authentication system, database logic, or existing UI behavior.
+
+The current architecture and all existing features must continue working exactly as they are.
+
+Add the following new Super Admin capabilities:
+
+1. Dynamic Dashboard Control
+
+* Super Admin can manage:
+
+  * User dashboard sections
+  * Staff dashboard sections
+  * Candidate dashboard sections
+  * Admin dashboard sections
+* Enable/disable cards, modules, menus, notices, widgets, and dashboard blocks without coding.
+
+2. Dynamic Feature Management
+
+* Super Admin can:
+
+  * Add new features/modules
+  * Hide existing features
+  * Enable beta modules
+  * Control visibility role-wise
+  * Configure feature permissions dynamically
+
+3. No-Code System Management
+
+* Add a configuration-based management layer.
+* Super Admin should be able to:
+
+  * Create dashboard sections
+  * Rename menus
+  * Change module visibility
+  * Add announcement banners
+  * Change workflow labels
+  * Add custom cards/widgets
+    without editing source code.
+
+4. Dynamic Role-Based Access Control
+
+* Super Admin can assign:
+
+  * menu access
+  * module access
+  * dashboard visibility
+  * feature permissions
+    role-wise.
+
+5. Live Dashboard Builder
+   Add a drag-and-drop or config-based dashboard management system where Super Admin can:
+
+* rearrange dashboard blocks
+* enable/disable sections
+* pin important widgets
+* create custom shortcuts
+
+6. Activity Monitoring
+   Super Admin must be able to monitor:
+
+* candidate activity
+* staff activity
+* admin activity
+* failed login attempts
+* module usage
+* live active users
+
+7. Dynamic Notice & Announcement System
+   Allow Super Admin to:
+
+* create popup announcements
+* create scrolling notices
+* dashboard alerts
+* role-based notices
+* scheduled announcements
+
+8. System Configuration Center
+   Allow Super Admin to manage:
+
+* environment configs
+* API configs
+* OTP settings
+* login restrictions
+* maintenance mode
+* security rules
+  without code changes.
+
+9. Database Rules
+   Do not break the existing database structure.
+   Only add scalable config/control tables if needed.
+
+10. Security Rules
+    Keep:
+
+* hidden Super Admin access
+* keyboard activation system
+* hidden password reveal
+* role protection
+* audit logs
+* route isolation
+  fully intact.
+
+11. Architecture Rules
+
+* Keep current system running exactly the same.
+* New features must be layered on top of the current architecture.
+* Do not rewrite existing workflows.
+* Use scalable modular architecture.
+* Use environment/config-based controls.
+* Generate production-ready implementation only.

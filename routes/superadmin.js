@@ -398,4 +398,254 @@ router.get('/security-monitor', superadminAuth, async (req, res) => {
   });
 });
 
+// ─── SYSTEM CONFIG ────────────────────────────────────────────────────────────
+
+router.get('/system-config', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM sa_system_config ORDER BY category, id');
+    await logSAAction(req.superAdmin.id, 'VIEW_SYSTEM_CONFIG', 'Viewed system config', req.ip, req.headers['user-agent']);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/system-config/:key', superadminAuth, async (req, res) => {
+  try {
+    const { config_value } = req.body;
+    const key = req.params.key;
+    const [rows] = await pool.query('SELECT id FROM sa_system_config WHERE config_key=?', [key]);
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Config key not found' });
+    await pool.query(
+      'UPDATE sa_system_config SET config_value=?, updated_by=?, updated_at=CURRENT_TIMESTAMP WHERE config_key=?',
+      [String(config_value), req.superAdmin.passkey_id, key]
+    );
+    await logSAAction(req.superAdmin.id, 'UPDATE_CONFIG', `Updated config: ${key} = ${config_value}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── FEATURE FLAGS ────────────────────────────────────────────────────────────
+
+router.get('/feature-flags', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM sa_feature_flags ORDER BY category, sort_order, id');
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/feature-flags', superadminAuth, async (req, res) => {
+  try {
+    const { feature_key, label, description, enabled, roles, is_beta, category } = req.body;
+    if (!feature_key || !label) return res.status(400).json({ success: false, message: 'feature_key and label required' });
+    const [ex] = await pool.query('SELECT id FROM sa_feature_flags WHERE feature_key=?', [feature_key]);
+    if (ex.length) return res.status(400).json({ success: false, message: 'Feature key already exists' });
+    await pool.query(
+      'INSERT INTO sa_feature_flags (feature_key,label,description,enabled,roles,is_beta,category) VALUES (?,?,?,?,?,?,?)',
+      [feature_key, label, description || '', enabled ? 1 : 0, roles || 'all', is_beta ? 1 : 0, category || 'general']
+    );
+    await logSAAction(req.superAdmin.id, 'CREATE_FEATURE_FLAG', `Created feature: ${feature_key}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/feature-flags/:id', superadminAuth, async (req, res) => {
+  try {
+    const { label, description, enabled, roles, is_beta, category } = req.body;
+    const [rows] = await pool.query('SELECT * FROM sa_feature_flags WHERE id=?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    const r = rows[0];
+    await pool.query(
+      'UPDATE sa_feature_flags SET label=?,description=?,enabled=?,roles=?,is_beta=?,category=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [
+        label ?? r.label,
+        description ?? r.description,
+        enabled !== undefined ? (enabled ? 1 : 0) : r.enabled,
+        roles ?? r.roles,
+        is_beta !== undefined ? (is_beta ? 1 : 0) : r.is_beta,
+        category ?? r.category,
+        req.params.id
+      ]
+    );
+    await logSAAction(req.superAdmin.id, 'UPDATE_FEATURE_FLAG', `Updated feature id ${req.params.id}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.delete('/feature-flags/:id', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT feature_key FROM sa_feature_flags WHERE id=?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    await pool.query('DELETE FROM sa_feature_flags WHERE id=?', [req.params.id]);
+    await logSAAction(req.superAdmin.id, 'DELETE_FEATURE_FLAG', `Deleted feature: ${rows[0].feature_key}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── DASHBOARD SECTION CONTROL ────────────────────────────────────────────────
+
+router.get('/dashboard-sections', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM sa_dashboard_sections ORDER BY roles, sort_order, id');
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/dashboard-sections', superadminAuth, async (req, res) => {
+  try {
+    const { section_key, label, description, roles, enabled, pinned, icon, sort_order } = req.body;
+    if (!section_key || !label) return res.status(400).json({ success: false, message: 'section_key and label required' });
+    await pool.query(
+      'INSERT INTO sa_dashboard_sections (section_key,label,description,roles,enabled,pinned,icon,sort_order) VALUES (?,?,?,?,?,?,?,?)',
+      [section_key, label, description || '', roles || 'all', enabled !== false ? 1 : 0, pinned ? 1 : 0, icon || '▣', parseInt(sort_order) || 0]
+    );
+    await logSAAction(req.superAdmin.id, 'CREATE_DASHBOARD_SECTION', `Created section: ${section_key}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/dashboard-sections/:id', superadminAuth, async (req, res) => {
+  try {
+    const { label, description, roles, enabled, pinned, icon, sort_order } = req.body;
+    const [rows] = await pool.query('SELECT * FROM sa_dashboard_sections WHERE id=?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    const r = rows[0];
+    await pool.query(
+      'UPDATE sa_dashboard_sections SET label=?,description=?,roles=?,enabled=?,pinned=?,icon=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [
+        label ?? r.label,
+        description ?? r.description,
+        roles ?? r.roles,
+        enabled !== undefined ? (enabled ? 1 : 0) : r.enabled,
+        pinned !== undefined ? (pinned ? 1 : 0) : r.pinned,
+        icon ?? r.icon,
+        sort_order !== undefined ? parseInt(sort_order) : r.sort_order,
+        req.params.id
+      ]
+    );
+    await logSAAction(req.superAdmin.id, 'UPDATE_DASHBOARD_SECTION', `Updated section id ${req.params.id}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.delete('/dashboard-sections/:id', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT section_key FROM sa_dashboard_sections WHERE id=?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    await pool.query('DELETE FROM sa_dashboard_sections WHERE id=?', [req.params.id]);
+    await logSAAction(req.superAdmin.id, 'DELETE_DASHBOARD_SECTION', `Deleted section: ${rows[0].section_key}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── ANNOUNCEMENTS ────────────────────────────────────────────────────────────
+
+router.get('/announcements', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM sa_announcements ORDER BY id DESC');
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/announcements', superadminAuth, async (req, res) => {
+  try {
+    const { title, content, type, target_roles, is_active, start_at, end_at } = req.body;
+    if (!title) return res.status(400).json({ success: false, message: 'Title required' });
+    const validTypes = ['banner', 'popup', 'scroll', 'alert'];
+    const aType = validTypes.includes(type) ? type : 'banner';
+    await pool.query(
+      'INSERT INTO sa_announcements (title,content,type,target_roles,is_active,start_at,end_at,created_by) VALUES (?,?,?,?,?,?,?,?)',
+      [title, content || '', aType, target_roles || 'all', is_active !== false ? 1 : 0, start_at || null, end_at || null, req.superAdmin.passkey_id]
+    );
+    await logSAAction(req.superAdmin.id, 'CREATE_ANNOUNCEMENT', `Created: ${title}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/announcements/:id', superadminAuth, async (req, res) => {
+  try {
+    const { title, content, type, target_roles, is_active, start_at, end_at } = req.body;
+    const [rows] = await pool.query('SELECT * FROM sa_announcements WHERE id=?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    const r = rows[0];
+    const validTypes = ['banner', 'popup', 'scroll', 'alert'];
+    const aType = type && validTypes.includes(type) ? type : r.type;
+    await pool.query(
+      'UPDATE sa_announcements SET title=?,content=?,type=?,target_roles=?,is_active=?,start_at=?,end_at=? WHERE id=?',
+      [title ?? r.title, content ?? r.content, aType, target_roles ?? r.target_roles,
+       is_active !== undefined ? (is_active ? 1 : 0) : r.is_active,
+       start_at !== undefined ? start_at : r.start_at,
+       end_at !== undefined ? end_at : r.end_at,
+       req.params.id]
+    );
+    await logSAAction(req.superAdmin.id, 'UPDATE_ANNOUNCEMENT', `Updated announcement id ${req.params.id}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.delete('/announcements/:id', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT title FROM sa_announcements WHERE id=?', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    await pool.query('DELETE FROM sa_announcements WHERE id=?', [req.params.id]);
+    await logSAAction(req.superAdmin.id, 'DELETE_ANNOUNCEMENT', `Deleted: ${rows[0].title}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── ACTIVITY MONITOR ─────────────────────────────────────────────────────────
+
+router.get('/activity', superadminAuth, async (req, res) => {
+  try {
+    const limit     = Math.min(parseInt(req.query.limit) || 100, 300);
+    const roleFilter = req.query.role || '';
+    const whereRole  = roleFilter ? 'WHERE role=?' : '';
+    const rp         = roleFilter ? [roleFilter] : [];
+
+    const [recentActivity] = await pool.query(
+      `SELECT id, created_at, role, action, details, ip_address AS ip FROM action_logs ${whereRole} ORDER BY id DESC LIMIT ?`,
+      [...rp, limit]
+    );
+    const [loginsByRole] = await pool.query(
+      `SELECT role, COUNT(*) AS total FROM action_logs WHERE action='LOGIN' AND created_at > datetime('now','-24 hours') GROUP BY role`
+    );
+    const [topActions] = await pool.query(
+      `SELECT action, COUNT(*) AS count FROM action_logs WHERE created_at > datetime('now','-7 days') GROUP BY action ORDER BY count DESC LIMIT 15`
+    );
+    const [failedLogins] = await pool.query(
+      `SELECT ip, COUNT(*) AS attempts, MAX(created_at) AS last_try FROM superadmin_login_attempts WHERE success=0 AND created_at > datetime('now','-24 hours') GROUP BY ip ORDER BY attempts DESC LIMIT 10`
+    );
+    const [saRecent] = await pool.query(
+      `SELECT l.*, s.passkey_id FROM superadmin_audit_logs l LEFT JOIN super_admins s ON l.super_admin_id=s.id ORDER BY l.id DESC LIMIT 20`
+    );
+    const [hourlyActivity] = await pool.query(
+      `SELECT strftime('%H:00',created_at) AS hour, COUNT(*) AS count FROM action_logs WHERE created_at > datetime('now','-24 hours') GROUP BY hour ORDER BY hour`
+    );
+
+    res.json({ success: true, recentActivity, loginsByRole, topActions, failedLogins, saRecentActivity: saRecent, hourlyActivity });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── MAINTENANCE MODE (quick toggle) ─────────────────────────────────────────
+
+router.get('/maintenance', superadminAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT config_value FROM sa_system_config WHERE config_key='maintenance_mode'");
+    const mode = rows[0]?.config_value === 'true';
+    res.json({ success: true, maintenance: mode });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/maintenance', superadminAuth, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const val = enabled ? 'true' : 'false';
+    await pool.query(
+      "UPDATE sa_system_config SET config_value=?, updated_by=?, updated_at=CURRENT_TIMESTAMP WHERE config_key='maintenance_mode'",
+      [val, req.superAdmin.passkey_id]
+    );
+    await logSAAction(req.superAdmin.id, 'SET_MAINTENANCE', `Maintenance mode: ${val}`, req.ip, req.headers['user-agent']);
+    res.json({ success: true, maintenance: enabled });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 module.exports = router;
+

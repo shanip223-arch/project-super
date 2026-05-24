@@ -90,20 +90,25 @@ $('mobileSidebarToggle').addEventListener('click', () =>
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 const SECTIONS = {
-  overview:        { label: 'Dashboard',        render: renderOverview },
-  users:           { label: 'User Management',  render: renderUsers },
-  applications:    { label: 'Applications',     render: renderApplications },
-  certificates:    { label: 'Certificates',     render: renderCertificates },
-  notices:         { label: 'Notices',          render: renderNotices },
-  objections:      { label: 'Objections',       render: renderObjections },
-  uploads:         { label: 'Upload Batches',   render: renderUploads },
-  backups:         { label: 'Backup Logs',      render: renderBackups },
-  audit:           { label: 'Audit Logs',       render: renderAuditLogs },
-  'sa-activity':   { label: 'SA Activity',      render: renderSAActivity },
-  'login-attempts':{ label: 'Login Attempts',   render: renderLoginAttempts },
-  security:        { label: 'Security Monitor', render: renderSecurity },
-  system:          { label: 'System Info',      render: renderSystemInfo },
-  env:             { label: 'Env Config',       render: renderEnvConfig },
+  overview:        { label: 'Dashboard',           render: renderOverview },
+  users:           { label: 'User Management',     render: renderUsers },
+  applications:    { label: 'Applications',        render: renderApplications },
+  certificates:    { label: 'Certificates',        render: renderCertificates },
+  notices:         { label: 'Notices',             render: renderNotices },
+  objections:      { label: 'Objections',          render: renderObjections },
+  uploads:         { label: 'Upload Batches',      render: renderUploads },
+  backups:         { label: 'Backup Logs',         render: renderBackups },
+  audit:           { label: 'Audit Logs',          render: renderAuditLogs },
+  'sa-activity':   { label: 'SA Activity',         render: renderSAActivity },
+  'login-attempts':{ label: 'Login Attempts',      render: renderLoginAttempts },
+  security:        { label: 'Security Monitor',    render: renderSecurity },
+  'system-config': { label: 'System Config',       render: renderSystemConfig },
+  features:        { label: 'Feature Flags',       render: renderFeatureFlags },
+  'dashboard-ctrl':{ label: 'Dashboard Control',   render: renderDashboardCtrl },
+  announcements:   { label: 'Announcements',       render: renderAnnouncements },
+  activity:        { label: 'Activity Monitor',    render: renderActivity },
+  system:          { label: 'System Info',         render: renderSystemInfo },
+  env:             { label: 'Env Config',          render: renderEnvConfig },
 };
 
 function navigate(key) {
@@ -664,6 +669,559 @@ async function renderEnvConfig() {
 function noData(cols) {
   return `<tr><td colspan="${cols}" class="sa-empty">No records found</td></tr>`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTROL CENTER SECTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── System Config ─────────────────────────────────────────────────────────────
+async function renderSystemConfig() {
+  const [d, maint] = await Promise.all([
+    apiFetch('/system-config'),
+    apiFetch('/maintenance')
+  ]);
+  if (!d.success) { content.innerHTML = err(d.message); return; }
+
+  const grouped = {};
+  for (const row of d.data) {
+    if (!grouped[row.category]) grouped[row.category] = [];
+    grouped[row.category].push(row);
+  }
+
+  const catLabels = { general:'General', security:'Security', features:'Feature Switches', upload:'Upload Settings', notifications:'Notifications' };
+  const maintOn = maint.maintenance;
+
+  content.innerHTML = `
+    <div class="sa-section-hdr"><h2>System Configuration Center</h2></div>
+
+    <div class="sa-card" style="margin-bottom:18px;border-color:${maintOn?'rgba(239,68,68,.4)':'rgba(34,197,94,.3)'}">
+      <div class="sa-card-head">
+        <h3>⚡ Maintenance Mode</h3>
+        <span class="badge ${maintOn?'red':'green'}">${maintOn?'ACTIVE':'OFF'}</span>
+      </div>
+      <div class="sa-card-body" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <p style="color:var(--muted);font-size:13px;margin-bottom:8px">When enabled, all users see the maintenance message. Super Admin access is unaffected.</p>
+          <div style="font-size:12px;color:${maintOn?'var(--red)':'var(--green)'}">Status: <strong>${maintOn?'Site is DOWN for maintenance':'Site is live and accessible'}</strong></div>
+        </div>
+        <label class="sa-toggle" title="Toggle maintenance mode">
+          <input type="checkbox" id="maintToggle" ${maintOn?'checked':''}>
+          <span class="sa-toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    ${Object.entries(grouped).map(([cat, rows]) => `
+      <div class="sa-card" style="margin-bottom:18px">
+        <div class="sa-card-head"><h3>${catLabels[cat]||cat}</h3></div>
+        <div class="sa-card-body" style="padding:0">
+          ${rows.map(r => `
+            <div class="sa-config-row" data-key="${esc(r.config_key)}">
+              <div class="sa-config-info">
+                <div class="sa-config-label">${esc(r.config_key)}</div>
+                <div class="sa-config-desc">${esc(r.description)}</div>
+              </div>
+              <div class="sa-config-ctrl">
+                ${r.config_type === 'boolean'
+                  ? `<label class="sa-toggle">
+                       <input type="checkbox" class="cfg-bool" data-key="${esc(r.config_key)}" ${r.config_value==='true'?'checked':''}>
+                       <span class="sa-toggle-slider"></span>
+                     </label>`
+                  : r.config_type === 'number'
+                  ? `<div style="display:flex;gap:8px;align-items:center">
+                       <input class="cfg-input" data-key="${esc(r.config_key)}" type="number" value="${esc(r.config_value)}" style="width:90px;height:32px;border:1px solid var(--border2);border-radius:6px;padding:0 8px;background:var(--bg);color:var(--text)">
+                       <button class="btn" onclick="saveCfgNum('${esc(r.config_key)}')">Save</button>
+                     </div>`
+                  : `<div style="display:flex;gap:8px;align-items:center">
+                       <input class="cfg-input" data-key="${esc(r.config_key)}" value="${esc(r.config_value)}" style="width:220px;height:32px;border:1px solid var(--border2);border-radius:6px;padding:0 8px;background:var(--bg);color:var(--text)">
+                       <button class="btn" onclick="saveCfgStr('${esc(r.config_key)}')">Save</button>
+                     </div>`
+                }
+                <div class="sa-config-meta">by ${esc(r.updated_by)} · ${fmt(r.updated_at)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('')}`;
+
+  $('maintToggle').addEventListener('change', async function() {
+    const on = this.checked;
+    const r = await apiFetch('/maintenance', { method:'PUT', body: JSON.stringify({ enabled: on }) });
+    r.success ? (toast(`Maintenance mode ${on?'ENABLED':'DISABLED'}`, on?'error':'success'), renderSystemConfig()) : toast(r.message||'Failed','error');
+  });
+
+  document.querySelectorAll('.cfg-bool').forEach(cb => {
+    cb.addEventListener('change', async function() {
+      const key = this.dataset.key;
+      const r = await apiFetch(`/system-config/${encodeURIComponent(key)}`, { method:'PUT', body: JSON.stringify({ config_value: this.checked?'true':'false' }) });
+      r.success ? toast(`${key} updated`) : toast(r.message||'Failed','error');
+    });
+  });
+}
+
+window.saveCfgStr = async key => {
+  const inp = document.querySelector(`.cfg-input[data-key="${key}"]`);
+  if (!inp) return;
+  const r = await apiFetch(`/system-config/${encodeURIComponent(key)}`, { method:'PUT', body: JSON.stringify({ config_value: inp.value }) });
+  r.success ? toast(`${key} saved`) : toast(r.message||'Failed','error');
+};
+window.saveCfgNum = window.saveCfgStr;
+
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+async function renderFeatureFlags() {
+  const d = await apiFetch('/feature-flags');
+  if (!d.success) { content.innerHTML = err(d.message); return; }
+
+  const grouped = {};
+  for (const f of d.data) {
+    if (!grouped[f.category]) grouped[f.category] = [];
+    grouped[f.category].push(f);
+  }
+
+  const enabled = d.data.filter(f=>f.enabled).length;
+  const beta    = d.data.filter(f=>f.is_beta).length;
+
+  content.innerHTML = `
+    <div class="sa-section-hdr"><h2>Feature Flag Management</h2></div>
+    <div class="sa-stats" style="margin-bottom:18px">
+      <div class="sa-stat"><div class="sa-stat-label">Total Features</div><div class="sa-stat-val blue">${d.data.length}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Enabled</div><div class="sa-stat-val green">${enabled}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Disabled</div><div class="sa-stat-val red">${d.data.length-enabled}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Beta Features</div><div class="sa-stat-val amber">${beta}</div></div>
+    </div>
+
+    <div class="sa-card" style="margin-bottom:18px">
+      <div class="sa-card-head"><h3>Add New Feature Flag</h3></div>
+      <div class="sa-card-body">
+        <div class="sa-form-grid">
+          <div class="sa-form-group"><label>Feature Key</label><input id="ff_key" placeholder="e.g. new_dashboard"></div>
+          <div class="sa-form-group"><label>Label</label><input id="ff_label" placeholder="Human-readable name"></div>
+          <div class="sa-form-group"><label>Category</label>
+            <select id="ff_cat">
+              <option value="general">General</option>
+              <option value="candidate">Candidate</option>
+              <option value="staff">Staff</option>
+              <option value="admin">Admin</option>
+              <option value="beta">Beta</option>
+            </select>
+          </div>
+          <div class="sa-form-group"><label>Roles (comma-separated or "all")</label><input id="ff_roles" value="all" placeholder="all / candidate / admin,upload_staff"></div>
+          <div class="sa-form-group"><label>Description</label><input id="ff_desc" placeholder="What this feature does"></div>
+          <div class="sa-form-group" style="display:flex;align-items:flex-end;gap:12px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
+              <input type="checkbox" id="ff_beta"> Beta Feature
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
+              <input type="checkbox" id="ff_enabled" checked> Enabled
+            </label>
+          </div>
+        </div>
+        <div class="sa-form-actions"><button class="btn primary" id="addFfBtn">Add Feature Flag</button></div>
+      </div>
+    </div>
+
+    ${Object.entries(grouped).map(([cat, flags]) => `
+      <div class="sa-card" style="margin-bottom:18px">
+        <div class="sa-card-head"><h3>${cat.charAt(0).toUpperCase()+cat.slice(1)} Features (${flags.length})</h3></div>
+        <div class="sa-table-wrap">
+          <table class="sa-table">
+            <thead><tr><th>Feature</th><th>Roles</th><th>Status</th><th>Beta</th><th>Updated</th><th>Actions</th></tr></thead>
+            <tbody>
+              ${flags.map(f=>`<tr>
+                <td>
+                  <div style="font-weight:700">${esc(f.label)}</div>
+                  <div style="font-size:11px;color:var(--muted)">${esc(f.feature_key)}</div>
+                  ${f.description?`<div style="font-size:11px;color:var(--muted2)">${esc(f.description)}</div>`:''}
+                </td>
+                <td>${esc(f.roles)}</td>
+                <td>
+                  <label class="sa-toggle">
+                    <input type="checkbox" class="ff-toggle" data-id="${f.id}" ${f.enabled?'checked':''}>
+                    <span class="sa-toggle-slider"></span>
+                  </label>
+                </td>
+                <td>${f.is_beta?'<span class="badge amber">Beta</span>':'<span class="badge muted">Stable</span>'}</td>
+                <td style="white-space:nowrap">${fmt(f.updated_at)}</td>
+                <td>
+                  <button class="btn danger" onclick="deleteFlag(${f.id},'${esc(f.label)}')">Delete</button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `).join('')}`;
+
+  $('addFfBtn').onclick = async () => {
+    const body = {
+      feature_key: $('ff_key').value.trim(),
+      label:       $('ff_label').value.trim(),
+      description: $('ff_desc').value.trim(),
+      roles:       $('ff_roles').value.trim() || 'all',
+      category:    $('ff_cat').value,
+      enabled:     $('ff_enabled').checked,
+      is_beta:     $('ff_beta').checked
+    };
+    if (!body.feature_key||!body.label) return toast('Key and label required','error');
+    const r = await apiFetch('/feature-flags',{method:'POST',body:JSON.stringify(body)});
+    r.success?(toast('Feature flag added'),renderFeatureFlags()):toast(r.message||'Failed','error');
+  };
+
+  document.querySelectorAll('.ff-toggle').forEach(cb=>{
+    cb.addEventListener('change', async function(){
+      const r = await apiFetch(`/feature-flags/${this.dataset.id}`,{method:'PUT',body:JSON.stringify({enabled:this.checked})});
+      r.success?toast(this.checked?'Feature enabled':'Feature disabled',this.checked?'success':'info'):toast(r.message||'Failed','error');
+    });
+  });
+}
+
+window.deleteFlag = async (id, label) => {
+  if (!confirm(`Delete feature flag "${label}"?`)) return;
+  const r = await apiFetch(`/feature-flags/${id}`,{method:'DELETE'});
+  r.success?(toast('Deleted'),renderFeatureFlags()):toast(r.message||'Failed','error');
+};
+
+// ── Dashboard Control ─────────────────────────────────────────────────────────
+async function renderDashboardCtrl() {
+  const d = await apiFetch('/dashboard-sections');
+  if (!d.success) { content.innerHTML = err(d.message); return; }
+
+  const roleOrder = ['candidate','upload_staff','objection_staff','admin','all'];
+  const grouped = {};
+  for (const s of d.data) {
+    const r = s.roles || 'all';
+    if (!grouped[r]) grouped[r]=[];
+    grouped[r].push(s);
+  }
+
+  const roleLabels = { candidate:'Candidate Portal', upload_staff:'Upload Staff', objection_staff:'Objection Staff', admin:'Admin Panel', all:'All Roles' };
+
+  content.innerHTML = `
+    <div class="sa-section-hdr"><h2>Dashboard Section Control</h2></div>
+    <div class="sa-stats" style="margin-bottom:18px">
+      <div class="sa-stat"><div class="sa-stat-label">Total Sections</div><div class="sa-stat-val blue">${d.data.length}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Active</div><div class="sa-stat-val green">${d.data.filter(s=>s.enabled).length}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Disabled</div><div class="sa-stat-val red">${d.data.filter(s=>!s.enabled).length}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Pinned</div><div class="sa-stat-val amber">${d.data.filter(s=>s.pinned).length}</div></div>
+    </div>
+
+    <div class="sa-card" style="margin-bottom:18px">
+      <div class="sa-card-head"><h3>Add Dashboard Section</h3></div>
+      <div class="sa-card-body">
+        <div class="sa-form-grid">
+          <div class="sa-form-group"><label>Section Key</label><input id="ds_key" placeholder="e.g. new_widget"></div>
+          <div class="sa-form-group"><label>Label</label><input id="ds_label" placeholder="Display name"></div>
+          <div class="sa-form-group"><label>Target Role</label>
+            <select id="ds_role">
+              <option value="candidate">Candidate</option>
+              <option value="upload_staff">Upload Staff</option>
+              <option value="objection_staff">Objection Staff</option>
+              <option value="admin">Admin</option>
+              <option value="all">All Roles</option>
+            </select>
+          </div>
+          <div class="sa-form-group"><label>Icon (emoji)</label><input id="ds_icon" value="▣" style="width:80px"></div>
+          <div class="sa-form-group"><label>Sort Order</label><input id="ds_sort" type="number" value="99" style="width:80px"></div>
+          <div class="sa-form-group"><label>Description</label><input id="ds_desc" placeholder="What this section shows"></div>
+          <div class="sa-form-group" style="display:flex;align-items:flex-end;gap:14px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
+              <input type="checkbox" id="ds_pin"> Pin to top
+            </label>
+          </div>
+        </div>
+        <div class="sa-form-actions"><button class="btn primary" id="addDsBtn">Add Section</button></div>
+      </div>
+    </div>
+
+    ${roleOrder.filter(r=>grouped[r]?.length).map(role=>`
+      <div class="sa-card" style="margin-bottom:18px">
+        <div class="sa-card-head">
+          <h3>${roleLabels[role]||role} Sections (${grouped[role].length})</h3>
+        </div>
+        <div class="sa-table-wrap">
+          <table class="sa-table">
+            <thead><tr><th>Icon</th><th>Section</th><th>Description</th><th>Order</th><th>Pinned</th><th>Visible</th><th>Action</th></tr></thead>
+            <tbody>
+              ${grouped[role].sort((a,b)=>a.sort_order-b.sort_order).map(s=>`<tr>
+                <td style="font-size:20px;text-align:center">${esc(s.icon)}</td>
+                <td>
+                  <div style="font-weight:700">${esc(s.label)}</div>
+                  <div style="font-size:11px;color:var(--muted)">${esc(s.section_key)}</div>
+                </td>
+                <td style="color:var(--muted);font-size:12px">${esc(s.description)}</td>
+                <td style="font-weight:700;text-align:center">${s.sort_order}</td>
+                <td style="text-align:center">${s.pinned?'<span class="badge amber">📌</span>':'—'}</td>
+                <td>
+                  <label class="sa-toggle">
+                    <input type="checkbox" class="ds-toggle" data-id="${s.id}" ${s.enabled?'checked':''}>
+                    <span class="sa-toggle-slider"></span>
+                  </label>
+                </td>
+                <td>
+                  <button class="btn danger" onclick="deleteSection(${s.id},'${esc(s.label)}')">Remove</button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `).join('')}`;
+
+  $('addDsBtn').onclick = async () => {
+    const body = {
+      section_key: $('ds_key').value.trim(),
+      label:       $('ds_label').value.trim(),
+      description: $('ds_desc').value.trim(),
+      roles:       $('ds_role').value,
+      icon:        $('ds_icon').value.trim()||'▣',
+      sort_order:  parseInt($('ds_sort').value)||99,
+      pinned:      $('ds_pin').checked,
+      enabled:     true
+    };
+    if (!body.section_key||!body.label) return toast('Key and label required','error');
+    const r = await apiFetch('/dashboard-sections',{method:'POST',body:JSON.stringify(body)});
+    r.success?(toast('Section added'),renderDashboardCtrl()):toast(r.message||'Failed','error');
+  };
+
+  document.querySelectorAll('.ds-toggle').forEach(cb=>{
+    cb.addEventListener('change', async function(){
+      const r = await apiFetch(`/dashboard-sections/${this.dataset.id}`,{method:'PUT',body:JSON.stringify({enabled:this.checked})});
+      r.success?toast(this.checked?'Section visible':'Section hidden',this.checked?'success':'info'):toast(r.message||'Failed','error');
+    });
+  });
+}
+
+window.deleteSection = async (id, label) => {
+  if (!confirm(`Remove dashboard section "${label}"?`)) return;
+  const r = await apiFetch(`/dashboard-sections/${id}`,{method:'DELETE'});
+  r.success?(toast('Section removed'),renderDashboardCtrl()):toast(r.message||'Failed','error');
+};
+
+// ── Announcements ─────────────────────────────────────────────────────────────
+async function renderAnnouncements() {
+  const d = await apiFetch('/announcements');
+  if (!d.success) { content.innerHTML = err(d.message); return; }
+
+  const active = d.data.filter(a=>a.is_active).length;
+
+  content.innerHTML = `
+    <div class="sa-section-hdr"><h2>Dynamic Announcement System</h2></div>
+    <div class="sa-stats" style="margin-bottom:18px">
+      <div class="sa-stat"><div class="sa-stat-label">Total</div><div class="sa-stat-val blue">${d.data.length}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Active</div><div class="sa-stat-val green">${active}</div></div>
+      <div class="sa-stat"><div class="sa-stat-label">Inactive</div><div class="sa-stat-val muted">${d.data.length-active}</div></div>
+    </div>
+
+    <div class="sa-card" style="margin-bottom:18px">
+      <div class="sa-card-head"><h3>Create Announcement</h3></div>
+      <div class="sa-card-body">
+        <div class="sa-form-grid">
+          <div class="sa-form-group"><label>Title</label><input id="an_title" placeholder="Announcement title"></div>
+          <div class="sa-form-group"><label>Type</label>
+            <select id="an_type">
+              <option value="banner">Banner (top of page)</option>
+              <option value="popup">Popup (modal dialog)</option>
+              <option value="scroll">Scrolling Ticker</option>
+              <option value="alert">Alert Box</option>
+            </select>
+          </div>
+          <div class="sa-form-group"><label>Target Audience</label>
+            <select id="an_roles">
+              <option value="all">All Users</option>
+              <option value="candidate">Candidates Only</option>
+              <option value="staff">Staff Only</option>
+              <option value="admin">Admin Only</option>
+            </select>
+          </div>
+          <div class="sa-form-group"><label>Start Date (optional)</label><input id="an_start" type="datetime-local"></div>
+          <div class="sa-form-group"><label>End Date (optional)</label><input id="an_end" type="datetime-local"></div>
+          <div class="sa-form-group sa-form-full"><label>Content / Message</label><textarea id="an_content" placeholder="Full announcement text…"></textarea></div>
+        </div>
+        <div class="sa-form-actions">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer;margin-right:auto">
+            <input type="checkbox" id="an_active" checked> Active immediately
+          </label>
+          <button class="btn primary" id="addAnBtn">Publish Announcement</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sa-card">
+      <div class="sa-card-head"><h3>All Announcements</h3></div>
+      <div class="sa-table-wrap">
+        <table class="sa-table">
+          <thead><tr><th>#</th><th>Title</th><th>Type</th><th>Audience</th><th>Active</th><th>Schedule</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${d.data.map(a=>`<tr>
+              <td>${a.id}</td>
+              <td>
+                <div style="font-weight:700">${esc(a.title)}</div>
+                ${a.content?`<div style="font-size:11px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.content)}</div>`:''}
+              </td>
+              <td>${badge(a.type,{banner:'blue',popup:'amber',scroll:'green',alert:'red'})}</td>
+              <td>${badge(a.target_roles||'all',{all:'muted',candidate:'blue',staff:'amber',admin:'red'})}</td>
+              <td>
+                <label class="sa-toggle">
+                  <input type="checkbox" class="an-toggle" data-id="${a.id}" ${a.is_active?'checked':''}>
+                  <span class="sa-toggle-slider"></span>
+                </label>
+              </td>
+              <td style="font-size:11px;color:var(--muted)">
+                ${a.start_at?`From: ${fmt(a.start_at)}`:'—'}<br>
+                ${a.end_at?`Until: ${fmt(a.end_at)}`:'No expiry'}
+              </td>
+              <td>
+                <button class="btn danger" onclick="deleteAnnouncement(${a.id},'${esc(a.title)}')">Delete</button>
+              </td>
+            </tr>`).join('') || noData(7)}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  $('addAnBtn').onclick = async () => {
+    const body = {
+      title:        $('an_title').value.trim(),
+      content:      $('an_content').value.trim(),
+      type:         $('an_type').value,
+      target_roles: $('an_roles').value,
+      is_active:    $('an_active').checked,
+      start_at:     $('an_start').value || null,
+      end_at:       $('an_end').value || null
+    };
+    if (!body.title) return toast('Title required','error');
+    const r = await apiFetch('/announcements',{method:'POST',body:JSON.stringify(body)});
+    r.success?(toast('Announcement published'),renderAnnouncements()):toast(r.message||'Failed','error');
+  };
+
+  document.querySelectorAll('.an-toggle').forEach(cb=>{
+    cb.addEventListener('change', async function(){
+      const r = await apiFetch(`/announcements/${this.dataset.id}`,{method:'PUT',body:JSON.stringify({is_active:this.checked})});
+      r.success?toast(this.checked?'Announcement activated':'Announcement deactivated',this.checked?'success':'info'):toast(r.message||'Failed','error');
+    });
+  });
+}
+
+window.deleteAnnouncement = async (id, title) => {
+  if (!confirm(`Delete announcement "${title}"?`)) return;
+  const r = await apiFetch(`/announcements/${id}`,{method:'DELETE'});
+  r.success?(toast('Deleted'),renderAnnouncements()):toast(r.message||'Failed','error');
+};
+
+// ── Activity Monitor ──────────────────────────────────────────────────────────
+let actRole = '';
+let actRefreshTimer = null;
+
+async function renderActivity() {
+  const d = await apiFetch(`/activity?limit=100${actRole?'&role='+actRole:''}`);
+  if (!d.success) { content.innerHTML = err(d.message); return; }
+
+  const roleColors = { admin:'amber', upload_staff:'blue', objection_staff:'muted', candidate:'green' };
+
+  content.innerHTML = `
+    <div class="sa-section-hdr">
+      <h2>Activity Monitor</h2>
+      <button class="btn" id="actRefreshBtn">↻ Refresh</button>
+    </div>
+
+    <div class="sa-stats" style="margin-bottom:18px">
+      ${d.loginsByRole.map(r=>`
+        <div class="sa-stat">
+          <div class="sa-stat-label">${esc(r.role||'unknown')} logins (24h)</div>
+          <div class="sa-stat-val ${roleColors[r.role]||'blue'}">${r.total}</div>
+        </div>
+      `).join('')}
+      ${!d.loginsByRole.length?`<div class="sa-stat"><div class="sa-stat-label">Logins Today</div><div class="sa-stat-val muted">0</div></div>`:''}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+      <div class="sa-card">
+        <div class="sa-card-head"><h3>Top Actions (7 days)</h3></div>
+        <div class="sa-table-wrap">
+          <table class="sa-table">
+            <thead><tr><th>Action</th><th>Count</th></tr></thead>
+            <tbody>
+              ${d.topActions.map(a=>`<tr>
+                <td><code>${esc(a.action)}</code></td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="width:${Math.min(80,Math.round((a.count/(d.topActions[0]?.count||1))*80))}px;height:6px;background:var(--blue);border-radius:3px"></div>
+                    <span style="font-weight:700">${a.count}</span>
+                  </div>
+                </td>
+              </tr>`).join('') || noData(2)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sa-card">
+        <div class="sa-card-head"><h3>Failed SA Logins (24h)</h3></div>
+        <div class="sa-table-wrap">
+          <table class="sa-table">
+            <thead><tr><th>IP</th><th>Attempts</th><th>Last Try</th></tr></thead>
+            <tbody>
+              ${d.failedLogins.map(f=>`<tr>
+                <td><code>${esc(f.ip)}</code></td>
+                <td><span class="badge ${f.attempts>=5?'red':'amber'}">${f.attempts}</span></td>
+                <td style="font-size:11px">${fmt(f.last_try)}</td>
+              </tr>`).join('') || noData(3)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="sa-card" style="margin-bottom:18px">
+      <div class="sa-card-head">
+        <h3>Live Activity Feed</h3>
+        <div style="display:flex;gap:8px">
+          ${['','admin','upload_staff','objection_staff','candidate'].map(r=>`
+            <button class="btn ${actRole===r?'primary':''}" onclick="setActRole('${r}')">
+              ${r||'All'}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+      <div class="sa-table-wrap">
+        <table class="sa-table">
+          <thead><tr><th>Time</th><th>Role</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>
+          <tbody>
+            ${d.recentActivity.map(a=>`<tr>
+              <td style="white-space:nowrap;font-size:12px">${fmt(a.created_at)}</td>
+              <td>${badge(a.role||'unknown',roleColors)}</td>
+              <td><code>${esc(a.action)}</code></td>
+              <td style="font-size:12px;color:var(--muted);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.details)}</td>
+              <td><code style="font-size:11px">${esc(a.ip)}</code></td>
+            </tr>`).join('') || noData(5)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="sa-card">
+      <div class="sa-card-head"><h3>Super Admin Recent Actions</h3></div>
+      <div class="sa-table-wrap">
+        <table class="sa-table">
+          <thead><tr><th>Time</th><th>Passkey</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>
+          <tbody>
+            ${d.saRecentActivity.map(a=>`<tr>
+              <td style="white-space:nowrap;font-size:12px">${fmt(a.created_at)}</td>
+              <td><span class="badge amber">${esc(a.passkey_id)}</span></td>
+              <td><code>${esc(a.action)}</code></td>
+              <td style="font-size:12px;color:var(--muted)">${esc(a.details)}</td>
+              <td><code style="font-size:11px">${esc(a.ip)}</code></td>
+            </tr>`).join('') || noData(5)}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  $('actRefreshBtn').onclick = () => { spin(); renderActivity(); };
+}
+
+window.setActRole = role => { actRole = role; spin(); renderActivity(); };
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 navigate('overview');
