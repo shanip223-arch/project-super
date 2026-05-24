@@ -1,12 +1,18 @@
 function $(id){return document.getElementById(id);}
 
+let isDuplicateSubmitInProgress = false;
+
 function showMsg(elId, msg, type='error'){
   const el = $(elId); el.textContent = msg; el.className = 'msg ' + type;
 }
 
 // Datetime
-setInterval(()=>{ $('datetime').textContent = new Date().toLocaleString('en-IN'); },1000);
-$('lastUpdate').textContent = new Date().toLocaleDateString('en-IN');
+setInterval(()=>{
+  const datetimeEl = $('datetime');
+  if (datetimeEl) datetimeEl.textContent = new Date().toLocaleString('en-IN');
+},1000);
+const lastUpdateEl = $('lastUpdate');
+if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleDateString('en-IN');
 
 // Load notices
 async function loadNotices(){
@@ -99,10 +105,13 @@ async function submitDuplicateApplication() {
   const txnId   = $('dupTxnId').value.trim();
   const msgEl   = $('dupMsg');
 
+  if (isDuplicateSubmitInProgress) return;
+
   msgEl.style.color = '#dc2626';
   if (!appNo)   return msgEl.textContent = 'Please enter your Application Number.';
   if (!reason)  return msgEl.textContent = 'Please enter the reason for duplicate.';
   if (!photo)   return msgEl.textContent = 'Please upload your passport size photograph.';
+  if (!['image/jpeg', 'image/jpg'].includes(photo.type)) return msgEl.textContent = 'Only JPG/JPEG photo is allowed.';
   if (photo.size > 2 * 1024 * 1024) return msgEl.textContent = 'Photo size must be less than 2MB.';
   if (!payMode) return msgEl.textContent = 'Please select a payment mode.';
   if (!txnId)   return msgEl.textContent = 'Please enter the Transaction ID / Receipt number.';
@@ -114,6 +123,7 @@ async function submitDuplicateApplication() {
   fd.append('txn_id', txnId);
   fd.append('photo', photo);
 
+  isDuplicateSubmitInProgress = true;
   msgEl.style.color = '#1d4ed8';
   msgEl.textContent = 'Submitting...';
 
@@ -123,6 +133,11 @@ async function submitDuplicateApplication() {
     if (j.success) {
       $('dupStep1').style.display = 'none';
       $('dupSuccess').style.display = 'block';
+      $('dupAppNo').value = '';
+      $('dupReason').value = '';
+      $('dupPhoto').value = '';
+      $('dupPayMode').value = '';
+      $('dupTxnId').value = '';
       msgEl.textContent = '';
     } else {
       msgEl.style.color = '#dc2626';
