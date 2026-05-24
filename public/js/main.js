@@ -16,11 +16,13 @@ if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleDateString('en-I
 
 // Load notices
 async function loadNotices(){
+  const list = $('noticeList');
+  if (!list) return;
+
   try{
     const r = await fetch('/api/candidate/notices');
     const j = await r.json();
-    
-    const list = $('noticeList');
+
     if(!j.data || !j.data.length){ list.innerHTML = '<p>No notices available.</p>'; return; }
     list.innerHTML = j.data.map(n => `
       <div class="notice-item">
@@ -29,7 +31,7 @@ async function loadNotices(){
         ${n.file_path ? `<a href="/uploads/temp/${n.file_path}" target="_blank" style="color:#1a3a6c; font-size:13px; font-weight:600; display:block; margin:5px 0;">📎 Download Notice Attachment</a>` : ''}
         <small>${new Date(n.created_at).toLocaleDateString('en-IN')}</small>
       </div>`).join('');
-  }catch(e){ $('noticeList').innerHTML = '<p>Failed to load notices. Please check if backend is running.</p>'; }
+  }catch(e){ list.innerHTML = '<p>Failed to load notices. Please check if backend is running.</p>'; }
 }
 loadNotices();
 
