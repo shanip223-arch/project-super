@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duplicate Certificate Application - Bar Council Certificate Portal</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+
+  <!-- Top strip -->
+  <div class="top-strip">
+    <span>🏛️ Government of Uttar Pradesh | Bar Council Official Portal</span>
+    <span id="datetime"></span>
+  </div>
+
+  <!-- Header -->
+  <header class="main-header">
+    <div class="logo-section">
+      <img src="/image/title.png" alt="Bar Council Logo" class="logo-img"
+        onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Emblem_of_India.svg/200px-Emblem_of_India.svg.png'">
+
+    </div>
+    <button class="admin-access-btn" onclick="toggleAdminLogin()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+        </path>
+      </svg>
+      Secure Access
+    </button>
+  </header>
+
+  <!-- Nav -->
+  <nav class="main-nav">
+    <a href="/index.html#home">Home</a>
+    <a href="/index.html#notices">Notices</a>
+    <a href="/duplicate-certificate.html" class="active">Duplicate Certificate</a>
+    <a href="/index.html#links">Important Links</a>
+    <a href="/index.html#about">About</a>
+    <a href="/index.html#contact">Contact</a>
+  </nav>
+
+  <!-- Duplicate Certificate Application -->
+  <section class="section grey" id="duplicate" style="padding:60px 20px;">
+    <h2 class="section-title">Apply for Duplicate Certificate</h2>
+    <p style="text-align:center;color:var(--text-muted);font-size:16px;margin-bottom:30px;">Lost or damaged your original certificate? Apply for a duplicate below.</p>
+    <div style="max-width:600px; margin:0 auto; background:#fff; border-radius:20px; padding:36px; box-shadow:0 4px 24px rgba(0,0,0,0.08); border:1px solid #e2e8f0;">
+
+      <div id="dupStep1">
+        <label style="font-weight:600;color:#1a3a6c;display:block;margin-bottom:6px;">Application Number <span style="color:#dc2626;">*</span></label>
+        <input type="text" id="dupAppNo" placeholder="e.g. UP12345/25" style="width:100%;padding:12px 16px;border:1px solid #e2e8f0;border-radius:10px;font-size:15px;margin-bottom:16px;">
+
+        <label style="font-weight:600;color:#1a3a6c;display:block;margin-bottom:6px;">Reason for Duplicate <span style="color:#dc2626;">*</span></label>
+        <textarea id="dupReason" placeholder="e.g. Certificate was lost, damaged, or stolen..." rows="3" style="width:100%;padding:12px 16px;border:1px solid #e2e8f0;border-radius:10px;font-size:15px;margin-bottom:16px;resize:vertical;font-family:inherit;"></textarea>
+
+        <label style="font-weight:600;color:#1a3a6c;display:block;margin-bottom:6px;">Passport Size Photograph (JPG only) <span style="color:#dc2626;">*</span></label>
+        <input type="file" id="dupPhoto" accept="image/jpeg,image/jpg" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:6px;">
+        <p style="font-size:12px;color:#64748b;margin-bottom:20px;">Only .jpg / .jpeg files accepted. Max size: 2MB.</p>
+
+        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px;margin-bottom:20px;">
+          <p style="font-weight:700;color:#92400e;margin-bottom:4px;">💳 Application Fee</p>
+          <p style="font-size:14px;color:#78350f;margin-bottom:12px;">A fee of <b>₹500</b> is required for duplicate certificate processing.</p>
+          <select id="dupPayMode" style="width:100%;padding:10px 14px;border:1px solid #fed7aa;border-radius:8px;font-size:14px;background:#fffbf5;">
+            <option value="">-- Select Payment Mode --</option>
+            <option value="UPI">UPI / GPay / PhonePe</option>
+            <option value="NEFT">NEFT / Bank Transfer</option>
+            <option value="DD">Demand Draft</option>
+            <option value="Cash">Cash at Counter</option>
+          </select>
+          <input type="text" id="dupTxnId" placeholder="Transaction ID / DD No. / Receipt No." style="width:100%;padding:10px 14px;border:1px solid #fed7aa;border-radius:8px;font-size:14px;margin-top:10px;background:#fffbf5;">
+        </div>
+
+        <button onclick="submitDuplicateApplication()" style="width:100%;padding:14px;background:#1a3a6c;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#0f2654'" onmouseout="this.style.background='#1a3a6c'">
+          📋 Submit Duplicate Application
+        </button>
+        <p id="dupMsg" style="margin-top:14px;text-align:center;font-size:14px;font-weight:600;"></p>
+      </div>
+
+      <div id="dupSuccess" style="display:none;text-align:center;padding:20px 0;">
+        <div style="font-size:52px;margin-bottom:12px;">✅</div>
+        <h3 style="color:#065f46;margin-bottom:8px;">Application Submitted!</h3>
+        <p style="color:#374151;font-size:15px;">Your duplicate certificate application has been received. The Bar Council team will review it and contact you within 7 working days.</p>
+        <button onclick="document.getElementById('dupSuccess').style.display='none';document.getElementById('dupStep1').style.display='block';" style="margin-top:20px;padding:10px 24px;background:#1a3a6c;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px;">Apply Another</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Admin Login Modal -->
+  <div class="modal" id="adminModal">
+    <div class="modal-content">
+      <span class="close" onclick="toggleAdminLogin()">&times;</span>
+      <h3>Portal Administration</h3>
+      <label>Authorized Username</label>
+      <input type="text" id="adminUser" placeholder="Enter username">
+      <label>Secure Password</label>
+      <input type="password" id="adminPass" placeholder="••••••••">
+      <button onclick="adminLogin()">Authenticate</button>
+      <p id="adminMsg" class="msg"></p>
+      <p class="muted">Access is strictly restricted to authorized personnel.<br>Default: admin / admin123 OR staff /
+        staff123</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>© 2024 Bar Council Certificate Portal | Government of India</p>
+    <p>Designed by Shashi Prakash | Last Updated: <span id="lastUpdate"></span></p>
+  </footer>
+
+  <script src="/js/main.js"></script>
+</body>
+
+</html>
