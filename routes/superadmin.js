@@ -132,6 +132,19 @@ router.get('/stats', superadminAuth, async (req, res) => {
   }
 });
 
+
+router.get('/duplicate-insights', superadminAuth, async (req, res) => {
+  const [[volume]] = await pool.query('SELECT COUNT(*) AS n FROM duplicate_requests');
+  const [[pending]] = await pool.query("SELECT COUNT(*) AS n FROM duplicate_requests WHERE status IN ('pending','under_review')");
+  const [[approved]] = await pool.query("SELECT COUNT(*) AS n FROM duplicate_requests WHERE status='approved' OR status='certificate_generated' OR status='delivered'");
+  const [[failedUploads]] = await pool.query("SELECT COUNT(*) AS n FROM duplicate_request_timeline WHERE event_type IN ('upload_failed','suspicious_upload')");
+  const [[duplicateTxn]] = await pool.query("SELECT COUNT(*) AS n FROM duplicate_request_timeline WHERE event_type='duplicate_txn_blocked'");
+  const [[paymentAnomaly]] = await pool.query("SELECT COUNT(*) AS n FROM duplicate_requests WHERE payment_status='anomaly'");
+  const [[adminActions]] = await pool.query("SELECT COUNT(*) AS n FROM duplicate_request_timeline WHERE actor_role='admin'");
+  const [[queueDead]] = await pool.query("SELECT COUNT(*) AS n FROM certificate_generation_queue WHERE status='dead'");
+  res.json({ success: true, data: { volume: volume.n, pending: pending.n, approved: approved.n, failedUploads: failedUploads.n, duplicateTxnAttempts: duplicateTxn.n, paymentAnomalies: paymentAnomaly.n, adminActions: adminActions.n, generationFailures: queueDead.n } });
+});
+
 // ─── USERS ────────────────────────────────────────────────────────────────────
 
 router.get('/users', superadminAuth, async (req, res) => {

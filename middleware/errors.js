@@ -29,6 +29,11 @@ const notFoundHandler = (req, res) => {
 };
 
 const errorHandler = (err, req, res, _next) => {
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    err.status = 400;
+    err.errorCode = 'FILE_TOO_LARGE';
+    err.message = 'Uploaded file exceeds 2MB limit.';
+  }
   const status = err.status || 500;
   const payload = {
     success: false,

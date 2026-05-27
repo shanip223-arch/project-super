@@ -19,6 +19,7 @@ const certificateRoutes = require('./routes/certificate');
 const objectionRoutes = require('./routes/objection');
 const superadminRoutes = require('./routes/superadmin');
 const { attachTraceId, notFoundHandler, errorHandler } = require('./middleware/errors');
+const { processQueuedCertificateGeneration } = require('./utils/duplicateCertificate');
 
 const app = express();
 
@@ -122,6 +123,15 @@ initDatabase().then(() => initSuperAdminDb()).then(() => {
       process.exit(1);
     }
     throw err;
+  });
+
+  // Duplicate certificate queue worker (PM2-safe periodic polling)
+  cron.schedule('*/1 * * * *', async () => {
+    try {
+      await processQueuedCertificateGeneration(5);
+    } catch (e) {
+      console.error('[duplicate-queue-worker]', e.message);
+    }
   });
 
   // Daily backup at 2 AM
