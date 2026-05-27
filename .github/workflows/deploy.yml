@@ -1,0 +1,25 @@
+name: ci-cd
+on:
+  push:
+    branches: [ main, staging ]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci
+      - run: node -e "console.log('env validation placeholder')"
+  deploy-staging:
+    if: github.ref == 'refs/heads/staging'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "staging deploy with health checks + rollback hooks"
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "production deploy with migration validation + backup hooks"

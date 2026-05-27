@@ -6,6 +6,8 @@ const pool = require('../config/db');
 const { authenticate } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roleCheck');
 const { logAction } = require('../utils/logger');
+const { uuidv7, hashFile, buildVerificationPayload, verifyPayloadSignature } = require('../utils/certificateAuthority');
+const { appendAudit } = require('../utils/immutableAudit');
 
 const router = express.Router();
 
@@ -32,6 +34,13 @@ router.post('/upload', authenticate, requireRole('upload_staff', 'admin'), uploa
       "INSERT INTO certificates (application_no, file_path, uploaded_by, status) VALUES (?, ?, ?, 'verified')",
       [application_no, req.file.path, req.user.id]
     );
+    const certificate_id = uuidv7();
+    const certificate_hash = hashFile(req.file.path);
+    const verification_url = `${req.protocol}://${req.get('host')}/api/certificate/verify/${certificate_id}`;
+    const { payload, signature } = buildVerificationPayload({ certificate_id, application_no, certificate_hash, issued_at: new Date().toISOString() });
+    await pool.query('INSERT INTO certificate_verifications (certificate_id, application_no, certificate_hash, verification_signature, verification_url, immutable_record_hash) VALUES (?, ?, ?, ?, ?, ?)', [certificate_id, application_no, certificate_hash, signature, verification_url, signature]);
+    await pool.query('INSERT INTO verification_audit (certificate_id, action, trace_id, ip_address, user_agent, details) VALUES (?, ?, ?, ?, ?, ?)', [certificate_id, 'CERTIFICATE_ISSUED', req.traceId || null, req.ip, req.headers['user-agent'] || null, JSON.stringify(payload)]);
+    await appendAudit('CERTIFICATE_ISSUED', { certificate_id, application_no, verification_url }, { actorId: req.user.id, actorRole: req.user.role, traceId: req.traceId, ip: req.ip, userAgent: req.headers['user-agent'] });
     await pool.query("UPDATE applications SET status='uploaded' WHERE application_no=?", [application_no]);
 
     await logAction(req.user.id, req.user.role, 'CERT_UPLOAD', `Certificate uploaded for ${application_no}`, req.ip);
@@ -71,3 +80,23 @@ router.post('/bulk-upload', authenticate, requireRole('upload_staff', 'admin'), 
 });
 
 module.exports = router;
+
+router.get('/verify/:certificateId', async (req, res) => {
+  try {
+    const { certificateId } = req.params;
+    const [[record]] = await pool.query('SELECT * FROM certificate_verifications WHERE certificate_id=?', [certificateId]);
+    if (!record) return res.status(404).json({ success: false, message: 'Invalid verification URL' });
+    const [[cert]] = await pool.query('SELECT * FROM certificates WHERE application_no=? ORDER BY id DESC LIMIT 1', [record.application_no]);
+    if (!cert || !cert.file_path || !fs.existsSync(cert.file_path)) return res.status(404).json({ success: false, message: 'Certificate file missing' });
+    const liveHash = hashFile(cert.file_path);
+    const validHash = liveHash === record.certificate_hash;
+    const payload = { certificate_id: record.certificate_id, application_no: record.application_no, hash: record.certificate_hash, issued_at: record.issued_at, timestamp_authority: process.env.TIMESTAMP_AUTHORITY_URL || 'pending', pkcs11_provider: process.env.PKCS11_PROVIDER_PATH || 'pending' };
+    const validSignature = verifyPayloadSignature(payload, record.verification_signature);
+    await pool.query('INSERT INTO verification_audit (certificate_id, action, trace_id, ip_address, user_agent, details) VALUES (?, ?, ?, ?, ?, ?)', [certificateId, 'VERIFY_ATTEMPT', req.traceId || null, req.ip, req.headers['user-agent'] || null, JSON.stringify({ validHash, validSignature })]);
+    await appendAudit('CERTIFICATE_VERIFY', { certificateId, validHash, validSignature }, { traceId: req.traceId, ip: req.ip, userAgent: req.headers['user-agent'] });
+    const ok = validHash && validSignature;
+    return res.status(ok ? 200 : 409).json({ success: ok, certificate_id: certificateId, application_no: record.application_no, valid_hash: validHash, valid_signature: validSignature, anti_tamper: ok, immutable_record: record.immutable_record_hash });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
