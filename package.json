@@ -20,7 +20,9 @@
     "mysql2": "^3.6.0",
     "node-cron": "^3.0.2",
     "sqlite3": "^6.0.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "bullmq": "^5.13.2",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
