@@ -9,6 +9,8 @@ const { requireRole } = require('../middleware/roleCheck');
 const { parseExcel, validateApplicationNo } = require('../utils/excelParser');
 const { runBackup } = require('../utils/backup');
 const { logAction } = require('../utils/logger');
+const { AppError, asyncHandler } = require('../middleware/errors');
+const { assertValidTransition, logDuplicateTimeline, createNotification } = require('../utils/duplicateCertificate');
 
 const router = express.Router();
 
@@ -270,18 +272,41 @@ router.get('/uploads', authenticate, requireRole('admin', 'upload_staff', 'objec
   res.json({ success: true, data: rows });
 });
 
-router.get('/duplicate-requests', authenticate, requireRole('admin','upload_staff','objection_staff'), async (req, res) => {
-  const [rows] = await pool.query('SELECT * FROM duplicate_requests ORDER BY id DESC LIMIT 300');
-  res.json({ success: true, data: rows });
-});
+router.get('/duplicate-requests', authenticate, requireRole('admin','upload_staff','objection_staff'), asyncHandler(async (req, res) => {
+  const status = String(req.query.status || '').trim();
+  const payment = String(req.query.payment_status || '').trim();
+  let sql = 'SELECT * FROM duplicate_requests WHERE 1=1';
+  const params = [];
+  if (status) { sql += ' AND status=?'; params.push(status); }
+  if (payment) { sql += ' AND payment_status=?'; params.push(payment); }
+  sql += ' ORDER BY id DESC LIMIT 300';
+  const [rows] = await pool.query(sql, params);
+  res.json({ success: true, data: rows, trace_id: req.traceId });
+}));
 
-router.post('/duplicate-requests/:id/review', authenticate, requireRole('admin'), async (req, res) => {
-  const { status, remarks, rejection_reason } = req.body;
-  if (!['under_review','approved','rejected','certificate_generated','delivered'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
-  await pool.query('UPDATE duplicate_requests SET status=?, admin_remarks=?, rejection_reason=?, approved_by=?, approved_at=CASE WHEN ?="approved" THEN CURRENT_TIMESTAMP ELSE approved_at END WHERE id=?', [status, remarks || null, rejection_reason || null, req.user.id, status, req.params.id]);
-  await pool.query('INSERT INTO duplicate_request_timeline (duplicate_request_id, actor_id, actor_role, event_type, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)', [req.params.id, req.user.id, req.user.role, 'admin_review', `${status}:${remarks || ''}`, req.ip, req.headers['user-agent'] || 'unknown']);
-  res.json({ success: true });
-});
+router.post('/duplicate-requests/:id/review', authenticate, requireRole('admin'), asyncHandler(async (req, res) => {
+  const { status, remarks, rejection_reason, payment_status, photo_validation_status } = req.body;
+  await pool.query('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    const [rows] = await pool.query('SELECT * FROM duplicate_requests WHERE id=?', [req.params.id]);
+    if (!rows.length) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Duplicate request not found.');
+    const current = rows[0];
+    assertValidTransition(current.status, status);
+    const nextPayment = payment_status || current.payment_status;
+    if (status === 'approved' && nextPayment !== 'verified') {
+      throw new AppError(400, 'PAYMENT_NOT_VERIFIED', 'Payment must be verified before approval.');
+    }
+    const nextDocStatus = photo_validation_status || current.document_validation_status;
+    await pool.query('UPDATE duplicate_requests SET status=?, admin_remarks=?, rejection_reason=?, payment_status=?, document_validation_status=?, approved_by=?, approved_at=CASE WHEN ?="approved" THEN CURRENT_TIMESTAMP ELSE approved_at END WHERE id=?', [status, remarks || null, rejection_reason || null, nextPayment, nextDocStatus, req.user.id, status, req.params.id]);
+    await logDuplicateTimeline({ duplicateRequestId: Number(req.params.id), req, eventType: 'admin_review', details: `${status};payment=${nextPayment};doc=${nextDocStatus};remarks=${remarks || ''}`, actorId: req.user.id, actorRole: req.user.role });
+    await createNotification({ userId: current.candidate_user_id, applicationNo: current.application_no, type: `duplicate_${status}`, title: `Duplicate request ${status}`, message: remarks || rejection_reason || `Status updated to ${status}.`, metadata: { request_id: Number(req.params.id) } });
+    await pool.query('COMMIT');
+    res.json({ success: true, trace_id: req.traceId });
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    throw e;
+  }
+}));
 
 router.get('/registrations', authenticate, requireRole('admin','upload_staff','objection_staff'), async (req, res) => {
   const [rows] = await pool.query('SELECT * FROM registrations ORDER BY id DESC LIMIT 300');

@@ -143,6 +143,12 @@ async function initDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_txn_id_unique ON duplicate_requests(txn_id)');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_idem_unique ON duplicate_requests(idempotency_key)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_duplicate_status ON duplicate_requests(status)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_queue_status_retry ON certificate_generation_queue(status, next_retry_at)');
+
   await pool.query(`CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
