@@ -22,13 +22,13 @@ if (hasRedis()) {
   }
 }
 
-const QUEUE_NAMES = ['certificate_generation', 'duplicate_processing', 'bulk_uploads', 'notifications', 'otp_retries', 'report_generation', 'audit_exports', 'communication'];
+const QUEUE_NAMES = ['certificate_generation','duplicate_processing','notifications','otp_retries','bulk_uploads','malware_scan','cleanup','audit_exports','backups','scheduled_maintenance'];
 const queues = new Map();
 
 function ensureQueue(name) {
   if (!bullmq || !connection) return null;
   if (!queues.has(name)) {
-    const q = new bullmq.Queue(name, { connection, defaultJobOptions: { attempts: 5, removeOnComplete: 1000, removeOnFail: 1000, backoff: { type: 'exponential', delay: 1500 } } });
+    const q = new bullmq.Queue(name, { connection, defaultJobOptions: { attempts: 5, removeOnComplete: 1000, removeOnFail: false, backoff: { type: 'exponential', delay: 1500 } } });
     queues.set(name, q);
   }
   return queues.get(name);
@@ -40,18 +40,19 @@ async function enqueue(name, payload, opts = {}) {
   const [existing] = await pool.query('SELECT id FROM async_jobs WHERE dedup_key=? AND status IN ("queued","processing") LIMIT 1', [dedupKey]);
   if (existing.length) return { queued: false, deduplicated: true, traceId };
 
-  await pool.query('INSERT INTO async_jobs (queue_name, trace_id, dedup_key, payload, status, run_after) VALUES (?, ?, ?, ?, ?, ?)', [
+  await pool.query('INSERT INTO async_jobs (queue_name, trace_id, dedup_key, payload, status, run_after, progress) VALUES (?, ?, ?, ?, ?, ?, ?)', [
     name,
     traceId,
     dedupKey,
     JSON.stringify(payload),
     'queued',
-    opts.delayMs ? new Date(Date.now() + opts.delayMs).toISOString() : null
+    opts.delayMs ? new Date(Date.now() + opts.delayMs).toISOString() : null,
+    0
   ]);
 
   const q = ensureQueue(name);
   if (q) {
-    await q.add(name, payload, { jobId: `${dedupKey}:${traceId}`, delay: opts.delayMs || 0 });
+    await q.add(name, { ...payload, trace_id: traceId }, { jobId: `${dedupKey}:${traceId}`, delay: opts.delayMs || 0, attempts: opts.attempts || 5, backoff: { type: 'exponential', delay: opts.backoffDelay || 2000 } });
   }
   emit('info', 'queue.job.enqueued', { queue: name, traceId, dedupKey });
   return { queued: true, traceId };

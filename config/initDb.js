@@ -218,6 +218,38 @@ async function initDatabase() {
   )`);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_async_jobs_status ON async_jobs(status, run_after)');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_async_jobs_dedup ON async_jobs(dedup_key, status)');
+  try { await pool.query("ALTER TABLE async_jobs ADD COLUMN progress INTEGER DEFAULT 0"); } catch (e) {}
+  try { await pool.query("ALTER TABLE async_jobs ADD COLUMN worker_name TEXT"); } catch (e) {}
+  try { await pool.query("ALTER TABLE async_jobs ADD COLUMN started_at DATETIME"); } catch (e) {}
+  try { await pool.query("ALTER TABLE async_jobs ADD COLUMN completed_at DATETIME"); } catch (e) {}
+  try { await pool.query("ALTER TABLE async_jobs ADD COLUMN latency_ms INTEGER DEFAULT 0"); } catch (e) {}
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS queue_retry_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    async_job_id INTEGER,
+    trace_id TEXT,
+    queue_name TEXT,
+    retry_no INTEGER,
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS queue_worker_health (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_name TEXT,
+    status TEXT,
+    details TEXT,
+    trace_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS scan_quarantine (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    original_path TEXT,
+    quarantine_path TEXT,
+    status TEXT DEFAULT 'quarantined',
+    reason TEXT,
+    trace_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 
   await pool.query(`CREATE TABLE IF NOT EXISTS audit_log_chain (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

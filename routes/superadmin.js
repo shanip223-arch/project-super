@@ -697,4 +697,40 @@ router.put('/maintenance', superadminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+
+router.get('/queue/dashboard', superadminAuth, async (req, res) => {
+  const [[active]] = await pool.query("SELECT COUNT(*) AS n FROM async_jobs WHERE status='processing'");
+  const [[pending]] = await pool.query("SELECT COUNT(*) AS n FROM async_jobs WHERE status IN ('queued','retry_scheduled')");
+  const [[failed]] = await pool.query("SELECT COUNT(*) AS n FROM async_jobs WHERE status='dead_letter'");
+  const [[dlq]] = await pool.query("SELECT COUNT(*) AS n FROM async_jobs WHERE status='dead_letter'");
+  const [[stuck]] = await pool.query("SELECT COUNT(*) AS n FROM async_jobs WHERE status='processing' AND started_at <= datetime('now', '-15 minutes')");
+  const [health] = await pool.query("SELECT worker_name, status, details, created_at FROM queue_worker_health ORDER BY id DESC LIMIT 50");
+  const [latency] = await pool.query("SELECT queue_name, AVG(latency_ms) AS avg_latency FROM async_jobs WHERE latency_ms > 0 GROUP BY queue_name");
+  const [retryHistory] = await pool.query("SELECT * FROM queue_retry_history ORDER BY id DESC LIMIT 100");
+  res.json({ success: true, data: { admin: { active: active.n, pending: pending.n, failed: failed.n, backlog: pending.n + active.n, workerHealth: health.slice(0, 20) }, superAdmin: { deadLetter: dlq.n, stuckJobs: stuck.n, anomalies: stuck.n + dlq.n, retryHistory, processingLatency: latency, workerCrashes: health.filter(h => h.status === 'failed').length, redisHealth: process.env.REDIS_URL || process.env.REDIS_HOST ? 'configured' : 'disabled' } } });
+});
+
+router.post('/queue/:jobId/retry', superadminAuth, async (req, res) => {
+  await pool.query("UPDATE async_jobs SET status='queued', run_after=NULL, last_error=NULL WHERE id=?", [req.params.jobId]);
+  res.json({ success: true });
+});
+router.post('/queue/:jobId/cancel', superadminAuth, async (req, res) => {
+  await pool.query("UPDATE async_jobs SET status='cancelled' WHERE id=?", [req.params.jobId]);
+  res.json({ success: true });
+});
+router.post('/queue/:jobId/replay', superadminAuth, async (req, res) => {
+  await pool.query("UPDATE async_jobs SET status='queued', attempts=0, run_after=NULL WHERE id=?", [req.params.jobId]);
+  res.json({ success: true });
+});
+router.post('/queue/cleanup', superadminAuth, async (req, res) => {
+  const [r] = await pool.query("DELETE FROM async_jobs WHERE status IN ('completed','cancelled') AND created_at <= datetime('now', '-7 days')");
+  res.json({ success: true, deleted: r.affectedRows || 0 });
+});
+router.post('/queue/:queueName/:action', superadminAuth, async (req, res) => {
+  const allowed = new Set(['pause', 'resume']);
+  if (!allowed.has(req.params.action)) return res.status(400).json({ success: false });
+  await pool.query('INSERT INTO queue_worker_health(worker_name, status, details) VALUES (?, ?, ?)', [req.params.queueName, req.params.action, '{}']);
+  res.json({ success: true, action: req.params.action });
+});
+
 module.exports = router;

@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "start:queue": "PROCESS_ROLE=queue node server.js",
+    "start:scheduler": "PROCESS_ROLE=scheduler node server.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "load:test": "node scripts/load-test/run.js"
   },
   "dependencies": {
     "archiver": "^6.0.0",
