@@ -86,11 +86,105 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS duplicate_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       application_no TEXT NOT NULL,
+      candidate_user_id INTEGER,
       reason TEXT,
+      payment_mode TEXT,
+      txn_id TEXT,
+      payment_status TEXT DEFAULT 'pending_verification',
+      photo_path TEXT,
+      document_validation_status TEXT DEFAULT 'pending',
       status TEXT DEFAULT 'pending',
+      idempotency_key TEXT,
+      trace_id TEXT,
+      admin_remarks TEXT,
+      rejection_reason TEXT,
+      approved_by INTEGER,
+      approved_at DATETIME,
+      delivered_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN candidate_user_id INTEGER"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN payment_mode TEXT"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN txn_id TEXT"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN payment_status TEXT DEFAULT 'pending_verification'"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN photo_path TEXT"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN document_validation_status TEXT DEFAULT 'pending'"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN idempotency_key TEXT"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN trace_id TEXT"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN admin_remarks TEXT"); } catch(e) {}
+  try { await pool.query("ALTER TABLE duplicate_requests ADD COLUMN rejection_reason TEXT"); } catch(e) {}
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS system_config (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS duplicate_request_timeline (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    duplicate_request_id INTEGER NOT NULL,
+    actor_id INTEGER,
+    actor_role TEXT,
+    event_type TEXT NOT NULL,
+    details TEXT,
+    trace_id TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS certificate_generation_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    duplicate_request_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'queued',
+    attempts INTEGER DEFAULT 0,
+    max_attempts INTEGER DEFAULT 3,
+    last_error TEXT,
+    next_retry_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    application_no TEXT,
+    type TEXT,
+    title TEXT,
+    message TEXT,
+    metadata TEXT,
+    is_read INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS registrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_no TEXT UNIQUE,
+    full_name TEXT NOT NULL,
+    mobile TEXT NOT NULL,
+    email TEXT,
+    state TEXT,
+    enrollment_no TEXT,
+    identity_no TEXT,
+    address TEXT,
+    photo_path TEXT,
+    document_path TEXT,
+    otp_verified INTEGER DEFAULT 0,
+    captcha_verified INTEGER DEFAULT 0,
+    terms_accepted INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'pending',
+    remarks TEXT,
+    trace_id TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const cfgDefaults = [
+    ['registration_enabled', '0'], ['registration_mode', 'admin_upload_only'], ['registration_visibility', 'hidden'],
+    ['registration_requires_approval', '1'], ['invite_only_mode', '0'], ['registration_window_active', '0'],
+    ['registration_daily_limit', '100'], ['dynamic_registration_fields', '[]']
+  ];
+  for (const [key, value] of cfgDefaults) {
+    await pool.query('INSERT OR IGNORE INTO system_config(key, value) VALUES(?, ?)', [key, value]);
+  }
 
   // OTP codes
   await pool.query(`

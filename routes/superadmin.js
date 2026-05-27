@@ -348,6 +348,26 @@ router.get('/system-info', superadminAuth, async (req, res) => {
   });
 });
 
+router.get('/registration/config', superadminAuth, async (req, res) => {
+  const [rows] = await pool.query("SELECT key, value, updated_at FROM system_config WHERE key LIKE 'registration_%' OR key='invite_only_mode' OR key='dynamic_registration_fields'");
+  res.json({ success: true, data: rows });
+});
+
+router.put('/registration/config', superadminAuth, async (req, res) => {
+  const allowed = new Set(['registration_enabled', 'registration_mode', 'registration_visibility', 'registration_requires_approval', 'invite_only_mode', 'registration_window_active', 'registration_daily_limit', 'dynamic_registration_fields']);
+  for (const [key, value] of Object.entries(req.body || {})) {
+    if (!allowed.has(key)) continue;
+    await pool.query('INSERT INTO system_config(key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP', [key, String(value)]);
+  }
+  await logSAAction(req.superAdmin.id, 'REGISTRATION_CONFIG_UPDATE', JSON.stringify(req.body || {}), req.ip, req.headers['user-agent']);
+  res.json({ success: true });
+});
+
+router.get('/registrations', superadminAuth, async (req, res) => {
+  const [rows] = await pool.query('SELECT * FROM registrations ORDER BY id DESC LIMIT 500');
+  res.json({ success: true, data: rows });
+});
+
 // ─── ENV CONFIG (safe non-sensitive view) ─────────────────────────────────────
 
 router.get('/env-config', superadminAuth, async (req, res) => {
@@ -648,4 +668,3 @@ router.put('/maintenance', superadminAuth, async (req, res) => {
 });
 
 module.exports = router;
-
