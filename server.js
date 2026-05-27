@@ -22,6 +22,7 @@ const { attachTraceId, notFoundHandler, errorHandler } = require('./middleware/e
 const { processQueuedCertificateGeneration } = require('./utils/duplicateCertificate');
 const { enqueue, runFallbackProcessor, hasRedis } = require('./utils/queue');
 const { emit, captureMetric } = require('./utils/structuredLogger');
+const { createWorkers, shutdownWorkers } = require('./utils/workerOrchestrator');
 
 const app = express();
 
@@ -58,7 +59,10 @@ app.get('/superadmin/panel', (req, res) => res.sendFile(path.join(__dirname, 'pu
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/image', express.static(path.join(__dirname, 'public', 'image')));
 app.use('/images', express.static(path.join(__dirname, 'public', 'image')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', (req, res, next) => {
+  if (req.path.includes('/temp/') || req.path.includes('/quarantine/')) return res.status(403).json({ success: false, message: 'Access denied' });
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth/request-otp', otpLimiter);
@@ -137,11 +141,16 @@ initDatabase().then(() => initSuperAdminDb()).then(() => {
     throw err;
   });
 
+
+  const role = process.env.PROCESS_ROLE || 'all';
+  if (role === 'queue' || role === 'all') createWorkers();
+
   let shuttingDown = false;
   const gracefulShutdown = async () => {
     if (shuttingDown) return;
     shuttingDown = true;
     emit('warn', 'shutdown.start', { reason: 'signal' });
+    await shutdownWorkers();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10000);
   };
