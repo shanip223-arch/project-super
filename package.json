@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "start:staging": "NODE_ENV=staging node server.js",
+    "worker:queue": "NODE_ENV=production node server.js"
   },
   "dependencies": {
     "archiver": "^6.0.0",
@@ -20,7 +22,9 @@
     "mysql2": "^3.6.0",
     "node-cron": "^3.0.2",
     "sqlite3": "^6.0.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "bullmq": "^5.10.0",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

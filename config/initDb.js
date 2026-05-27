@@ -154,6 +154,25 @@ async function initDatabase() {
     is_read INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS system_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    severity TEXT DEFAULT 'info',
+    trace_id TEXT,
+    actor_role TEXT,
+    actor_id INTEGER,
+    ip_address TEXT,
+    user_agent TEXT,
+    payload TEXT,
+    prev_hash TEXT,
+    hash TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_system_events_created_at ON system_events(created_at)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_duplicate_requests_status ON duplicate_requests(status)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_duplicate_requests_app_status ON duplicate_requests(application_no, status)');
+
   await pool.query(`CREATE TABLE IF NOT EXISTS registrations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     application_no TEXT UNIQUE,

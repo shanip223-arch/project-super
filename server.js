@@ -10,6 +10,10 @@ const cron = require('node-cron');
 const { initDatabase } = require('./config/initDb');
 const { initSuperAdminDb } = require('./config/initSuperAdminDb');
 const { runBackup } = require('./utils/backup');
+const { startDuplicateQueueProcessor } = require('./utils/duplicateQueueProcessor');
+const { initQueues, getQueueStatus, closeQueues } = require('./utils/queueManager');
+const { emitSystemEvent } = require('./utils/monitoring');
+const pool = require('./config/db');
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -92,8 +96,21 @@ app.get('/admin/:page', (req, res, next) => {
 app.get('/staff', (req, res) => res.sendFile(path.join(__dirname, 'public', 'staff.html')));
 app.get('/candidate', (req, res) => res.sendFile(path.join(__dirname, 'public', 'candidate.html')));
 
-app.get('/healthz', (req, res) => res.status(200).json({ success: true, status: 'ok', trace_id: req.traceId }));
-app.get('/readyz', (req, res) => res.status(200).json({ success: true, status: 'ready', trace_id: req.traceId }));
+let maintenanceMode = false;
+app.get('/healthz', async (req, res) => {
+  const q = await getQueueStatus();
+  res.status(200).json({ success: true, status: maintenanceMode ? 'maintenance' : 'ok', queue: q.backend, trace_id: req.traceId });
+});
+app.get('/readyz', async (req, res) => {
+  try {
+    await pool.query('SELECT 1 as ok');
+    const q = await getQueueStatus();
+    const ready = !maintenanceMode;
+    return res.status(ready ? 200 : 503).json({ success: ready, status: ready ? 'ready' : 'maintenance', queue: q.backend, trace_id: req.traceId });
+  } catch (e) {
+    return res.status(503).json({ success: false, status: 'db_unready', trace_id: req.traceId });
+  }
+});
 
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -123,6 +140,23 @@ initDatabase().then(() => initSuperAdminDb()).then(() => {
     }
     throw err;
   });
+
+  startDuplicateQueueProcessor();
+  initQueues().then((q)=>console.log('Queue backend:', q.mode)).catch(()=>{});
+
+
+
+  const shutdown = async (signal) => {
+    try {
+      maintenanceMode = true;
+      await emitSystemEvent({ event_type: 'graceful_shutdown', severity: 'warn', payload: { signal } });
+      await closeQueues();
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 8000).unref();
+    } catch (_) { process.exit(1); }
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   // Daily backup at 2 AM
   cron.schedule('0 2 * * *', () => {

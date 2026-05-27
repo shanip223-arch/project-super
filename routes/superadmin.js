@@ -5,6 +5,7 @@ const os        = require('os');
 const pool      = require('../config/db');
 const { superadminAuth }           = require('../middleware/superadminAuth');
 const { logSAAction, recordSALoginAttempt } = require('../utils/superadminLogger');
+const { getQueueStatus } = require('../utils/queueManager');
 
 const router = express.Router();
 
@@ -130,6 +131,17 @@ router.get('/stats', superadminAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
+
+router.get('/monitoring/overview', superadminAuth, async (req, res) => {
+  const queue = await getQueueStatus();
+  const [[apiFailures]] = await pool.query("SELECT COUNT(*) AS n FROM system_events WHERE severity='error' AND DATE(created_at)=DATE('now')");
+  const [[suspicious]] = await pool.query("SELECT COUNT(*) AS n FROM system_events WHERE event_type='suspicious_activity' AND DATE(created_at)=DATE('now')");
+  const [[dupPending]] = await pool.query("SELECT COUNT(*) AS n FROM duplicate_requests WHERE status IN ('pending','under_review')");
+  const [[dupFailed]] = await pool.query("SELECT COUNT(*) AS n FROM certificate_generation_queue WHERE status='failed'");
+  const [recent] = await pool.query("SELECT event_type, severity, trace_id, created_at FROM system_events ORDER BY id DESC LIMIT 30");
+  res.json({ success: true, data: { queue, kpis: { apiFailures: apiFailures.n, suspicious: suspicious.n, duplicatePending: dupPending.n, duplicateQueueFailed: dupFailed.n }, recent } });
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────

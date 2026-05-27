@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { emitSystemEvent } = require('../utils/monitoring');
 
 class AppError extends Error {
   constructor(status, errorCode, message, options = {}) {
@@ -29,6 +30,12 @@ const notFoundHandler = (req, res) => {
 };
 
 const errorHandler = (err, req, res, _next) => {
+
+  if (err && err.name === 'MulterError' && err.code === 'LIMIT_FILE_SIZE') {
+    err.status = 400;
+    err.errorCode = 'FILE_TOO_LARGE';
+    err.message = 'Uploaded file exceeds allowed size.';
+  }
   const status = err.status || 500;
   const payload = {
     success: false,
@@ -44,6 +51,7 @@ const errorHandler = (err, req, res, _next) => {
     console.error(`[${req.traceId}]`, err);
   }
 
+  emitSystemEvent({ event_type: 'api_error', severity: status >= 500 ? 'error' : 'warn', trace_id: req.traceId, actor_role: req.user?.role || null, actor_id: req.user?.id || null, ip_address: req.ip, user_agent: req.headers['user-agent'] || null, payload: { path: req.originalUrl, method: req.method, code: payload.error_code, status } }).catch(() => {});
   res.status(status).json(payload);
 };
 

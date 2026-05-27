@@ -5,6 +5,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 const { authenticate } = require('../middleware/auth');
+const { AppError, asyncHandler } = require('../middleware/errors');
 const { requireRole } = require('../middleware/roleCheck');
 const { parseExcel, validateApplicationNo } = require('../utils/excelParser');
 const { runBackup } = require('../utils/backup');
@@ -270,18 +271,33 @@ router.get('/uploads', authenticate, requireRole('admin', 'upload_staff', 'objec
   res.json({ success: true, data: rows });
 });
 
-router.get('/duplicate-requests', authenticate, requireRole('admin','upload_staff','objection_staff'), async (req, res) => {
-  const [rows] = await pool.query('SELECT * FROM duplicate_requests ORDER BY id DESC LIMIT 300');
-  res.json({ success: true, data: rows });
-});
+router.get('/duplicate-requests', authenticate, requireRole('admin','upload_staff','objection_staff'), asyncHandler(async (req, res) => {
+  const status = req.query.status;
+  const sql = status ? 'SELECT * FROM duplicate_requests WHERE status=? ORDER BY id DESC LIMIT 300' : 'SELECT * FROM duplicate_requests ORDER BY id DESC LIMIT 300';
+  const [rows] = await pool.query(sql, status ? [status] : []);
+  res.json({ success: true, data: rows, trace_id: req.traceId });
+}));
 
-router.post('/duplicate-requests/:id/review', authenticate, requireRole('admin'), async (req, res) => {
+router.post('/duplicate-requests/:id/review', authenticate, requireRole('admin'), asyncHandler(async (req, res) => {
   const { status, remarks, rejection_reason } = req.body;
-  if (!['under_review','approved','rejected','certificate_generated','delivered'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
-  await pool.query('UPDATE duplicate_requests SET status=?, admin_remarks=?, rejection_reason=?, approved_by=?, approved_at=CASE WHEN ?="approved" THEN CURRENT_TIMESTAMP ELSE approved_at END WHERE id=?', [status, remarks || null, rejection_reason || null, req.user.id, status, req.params.id]);
-  await pool.query('INSERT INTO duplicate_request_timeline (duplicate_request_id, actor_id, actor_role, event_type, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)', [req.params.id, req.user.id, req.user.role, 'admin_review', `${status}:${remarks || ''}`, req.ip, req.headers['user-agent'] || 'unknown']);
-  res.json({ success: true });
-});
+  if (!['pending','under_review','approved','rejected','certificate_generated','delivered'].includes(status)) throw new AppError(400, 'INVALID_STATUS', 'Invalid status');
+  const [rows] = await pool.query('SELECT * FROM duplicate_requests WHERE id=?', [req.params.id]);
+  if (!rows.length) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Request not found');
+  await pool.query('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    await pool.query('UPDATE duplicate_requests SET status=?, admin_remarks=?, rejection_reason=?, approved_by=?, approved_at=CASE WHEN ?="approved" THEN CURRENT_TIMESTAMP ELSE approved_at END WHERE id=?', [status, remarks || null, rejection_reason || null, req.user.id, status, req.params.id]);
+    await pool.query('INSERT INTO duplicate_request_timeline (duplicate_request_id, actor_id, actor_role, event_type, details, trace_id, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [req.params.id, req.user.id, req.user.role, 'admin_review', `${status}:${remarks || ''}`, req.traceId, req.ip, req.headers['user-agent'] || 'unknown']);
+    await pool.query('INSERT INTO notifications (application_no, type, title, message, metadata) VALUES (?, ?, ?, ?, ?)', [rows[0].application_no, `duplicate_${status}`, `Duplicate request ${status}`, remarks || rejection_reason || 'Request reviewed by admin', JSON.stringify({ request_id: rows[0].id, status })]);
+    if (status === 'approved') {
+      await pool.query("UPDATE certificate_generation_queue SET status='queued', next_retry_at=NULL WHERE duplicate_request_id=?", [rows[0].id]);
+    }
+    await pool.query('COMMIT');
+    res.json({ success: true, trace_id: req.traceId });
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    throw e;
+  }
+}));
 
 router.get('/registrations', authenticate, requireRole('admin','upload_staff','objection_staff'), async (req, res) => {
   const [rows] = await pool.query('SELECT * FROM registrations ORDER BY id DESC LIMIT 300');
