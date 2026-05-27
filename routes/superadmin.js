@@ -145,6 +145,23 @@ router.get('/duplicate-insights', superadminAuth, async (req, res) => {
   res.json({ success: true, data: { volume: volume.n, pending: pending.n, approved: approved.n, failedUploads: failedUploads.n, duplicateTxnAttempts: duplicateTxn.n, paymentAnomalies: paymentAnomaly.n, adminActions: adminActions.n, generationFailures: queueDead.n } });
 });
 
+
+router.get('/observability', superadminAuth, async (req, res) => {
+  const [[pendingQueues]] = await pool.query("SELECT COUNT(*) AS n FROM async_jobs WHERE status IN ('queued','retry_scheduled','processing')");
+  const [[failedQueues]] = await pool.query("SELECT COUNT(*) AS n FROM async_jobs WHERE status='dead_letter'");
+  const [[certificateFailures]] = await pool.query("SELECT COUNT(*) AS n FROM certificate_generation_queue WHERE status='dead'");
+  const [[otpFailures]] = await pool.query("SELECT COUNT(*) AS n FROM monitoring_events WHERE metric_type='otp_failure' AND DATE(created_at)=DATE('now')");
+  const [[queueFailures]] = await pool.query("SELECT COUNT(*) AS n FROM monitoring_events WHERE metric_type='queue_failure' AND DATE(created_at)=DATE('now')");
+  const [recent] = await pool.query("SELECT metric_type, status, details, trace_id, created_at FROM monitoring_events ORDER BY id DESC LIMIT 30");
+  res.json({
+    success: true,
+    data: {
+      queue: { pending: pendingQueues.n, failed: failedQueues.n },
+      failures: { certificate: certificateFailures.n, otp: otpFailures.n, queue: queueFailures.n },
+      liveFeed: recent
+    }
+  });
+});
 // ─── USERS ────────────────────────────────────────────────────────────────────
 
 router.get('/users', superadminAuth, async (req, res) => {

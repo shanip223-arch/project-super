@@ -192,6 +192,47 @@ async function initDatabase() {
     await pool.query('INSERT OR IGNORE INTO system_config(key, value) VALUES(?, ?)', [key, value]);
   }
 
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS monitoring_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    metric_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    details TEXT,
+    trace_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS async_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_name TEXT NOT NULL,
+    trace_id TEXT,
+    dedup_key TEXT,
+    payload TEXT,
+    status TEXT DEFAULT 'queued',
+    attempts INTEGER DEFAULT 0,
+    max_attempts INTEGER DEFAULT 5,
+    run_after DATETIME,
+    last_error TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_async_jobs_status ON async_jobs(status, run_after)');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_async_jobs_dedup ON async_jobs(dedup_key, status)');
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS audit_log_chain (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    actor_id INTEGER,
+    actor_role TEXT,
+    trace_id TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    payload TEXT,
+    event_version INTEGER DEFAULT 1,
+    prev_hash TEXT,
+    event_hash TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // OTP codes
   await pool.query(`
     CREATE TABLE IF NOT EXISTS otp_codes (

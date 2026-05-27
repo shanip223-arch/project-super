@@ -20,6 +20,8 @@ const objectionRoutes = require('./routes/objection');
 const superadminRoutes = require('./routes/superadmin');
 const { attachTraceId, notFoundHandler, errorHandler } = require('./middleware/errors');
 const { processQueuedCertificateGeneration } = require('./utils/duplicateCertificate');
+const { enqueue, runFallbackProcessor, hasRedis } = require('./utils/queue');
+const { emit, captureMetric } = require('./utils/structuredLogger');
 
 const app = express();
 
@@ -93,8 +95,18 @@ app.get('/admin/:page', (req, res, next) => {
 app.get('/staff', (req, res) => res.sendFile(path.join(__dirname, 'public', 'staff.html')));
 app.get('/candidate', (req, res) => res.sendFile(path.join(__dirname, 'public', 'candidate.html')));
 
-app.get('/healthz', (req, res) => res.status(200).json({ success: true, status: 'ok', trace_id: req.traceId }));
-app.get('/readyz', (req, res) => res.status(200).json({ success: true, status: 'ready', trace_id: req.traceId }));
+app.get('/healthz', async (req, res) => {
+  const mem = process.memoryUsage();
+  await captureMetric('runtime_memory', 'ok', { rss: mem.rss, heapUsed: mem.heapUsed }, req.traceId);
+  res.status(200).json({ success: true, status: 'ok', trace_id: req.traceId, memory: { rss: mem.rss, heap_used: mem.heapUsed } });
+});
+app.get('/readyz', async (req, res) => {
+  const checks = { redis: hasRedis() ? 'configured' : 'disabled', db: 'unknown', storage: 'unknown' };
+  try { await require('./config/db').query('SELECT 1'); checks.db = 'ready'; } catch (e) { checks.db = 'down'; }
+  checks.storage = fs.existsSync('uploads') ? 'ready' : 'missing';
+  const ok = checks.db === 'ready' && checks.storage === 'ready';
+  res.status(ok ? 200 : 503).json({ success: ok, status: ok ? 'ready' : 'not_ready', checks, trace_id: req.traceId });
+});
 
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -125,12 +137,36 @@ initDatabase().then(() => initSuperAdminDb()).then(() => {
     throw err;
   });
 
-  // Duplicate certificate queue worker (PM2-safe periodic polling)
+  let shuttingDown = false;
+  const gracefulShutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    emit('warn', 'shutdown.start', { reason: 'signal' });
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 10000);
+  };
+  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
+
+  // Queue workers (restart-safe fallback polling processor)
   cron.schedule('*/1 * * * *', async () => {
     try {
       await processQueuedCertificateGeneration(5);
+      await runFallbackProcessor({
+        certificate_generation: async payload => {
+          if (payload && payload.duplicate_request_id) await processQueuedCertificateGeneration(5);
+        },
+        notifications: async payload => emit('info', 'notification.dispatched', payload),
+        communication: async payload => emit('info', 'communication.dispatched', payload),
+        report_generation: async payload => emit('info', 'report.generated', payload),
+        audit_exports: async payload => emit('info', 'audit.exported', payload),
+        otp_retries: async payload => emit('info', 'otp.retry', payload),
+        bulk_uploads: async payload => emit('info', 'bulk.upload', payload),
+        duplicate_processing: async payload => emit('info', 'duplicate.processing', payload)
+      });
     } catch (e) {
-      console.error('[duplicate-queue-worker]', e.message);
+      await captureMetric('worker_crash', 'error', { error: e.message });
+      console.error('[queue-worker]', e.message);
     }
   });
 
