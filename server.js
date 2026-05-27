@@ -19,10 +19,12 @@ const certificateRoutes = require('./routes/certificate');
 const objectionRoutes = require('./routes/objection');
 const superadminRoutes = require('./routes/superadmin');
 const { attachTraceId, notFoundHandler, errorHandler } = require('./middleware/errors');
+const { globalLimiter, csrfGuard, issueCsrf } = require('./middleware/security');
 const { processQueuedCertificateGeneration } = require('./utils/duplicateCertificate');
 const { enqueue, runFallbackProcessor, hasRedis } = require('./utils/queue');
 const { emit, captureMetric } = require('./utils/structuredLogger');
 const { createWorkers, shutdownWorkers } = require('./utils/workerOrchestrator');
+const opsRoutes = require('./routes/ops');
 
 const app = express();
 
@@ -33,10 +35,16 @@ dirs.forEach(dir => {
 });
 
 // Middleware
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], imgSrc: ["'self'", 'data:'], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"] } },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
+}));
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(globalLimiter);
+app.use(issueCsrf);
+app.use(csrfGuard);
 app.use(attachTraceId);
 
 const otpLimiter = rateLimit({
@@ -73,6 +81,7 @@ app.use('/api/candidate', candidateRoutes);
 app.use('/api/certificate', certificateRoutes);
 app.use('/api/objection', objectionRoutes);
 app.use('/api/superadmin', superadminRoutes);
+app.use('/api/ops', opsRoutes);
 
 // Frontend routes
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

@@ -265,6 +265,45 @@ async function initDatabase() {
     event_hash TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS certificate_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    certificate_id TEXT UNIQUE NOT NULL,
+    application_no TEXT NOT NULL,
+    certificate_hash TEXT NOT NULL,
+    verification_signature TEXT NOT NULL,
+    verification_url TEXT NOT NULL,
+    immutable_record_hash TEXT,
+    status TEXT DEFAULT 'active',
+    issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    verified_at DATETIME
+  )`);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_cert_verify_app ON certificate_verifications(application_no)');
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS verification_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    certificate_id TEXT,
+    action TEXT NOT NULL,
+    trace_id TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS storage_objects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    bucket_type TEXT DEFAULT 'private',
+    object_key TEXT NOT NULL,
+    local_path TEXT,
+    checksum_sha256 TEXT,
+    size_bytes INTEGER,
+    retention_until DATETIME,
+    status TEXT DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // OTP codes
   await pool.query(`
     CREATE TABLE IF NOT EXISTS otp_codes (

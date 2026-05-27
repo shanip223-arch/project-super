@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: bar-council-app }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: bar-council-app } }
+  template:
+    metadata: { labels: { app: bar-council-app } }
+    spec:
+      containers:
+        - name: app
+          image: bar-council-app:latest
+          ports: [{ containerPort: 5000 }]
+          livenessProbe: { httpGet: { path: /healthz, port: 5000 }, initialDelaySeconds: 10 }
+          readinessProbe: { httpGet: { path: /readyz, port: 5000 }, initialDelaySeconds: 10 }
