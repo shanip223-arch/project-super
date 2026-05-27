@@ -270,4 +270,34 @@ router.get('/uploads', authenticate, requireRole('admin', 'upload_staff', 'objec
   res.json({ success: true, data: rows });
 });
 
+router.get('/duplicate-requests', authenticate, requireRole('admin','upload_staff','objection_staff'), async (req, res) => {
+  const [rows] = await pool.query('SELECT * FROM duplicate_requests ORDER BY id DESC LIMIT 300');
+  res.json({ success: true, data: rows });
+});
+
+router.post('/duplicate-requests/:id/review', authenticate, requireRole('admin'), async (req, res) => {
+  const { status, remarks, rejection_reason } = req.body;
+  if (!['under_review','approved','rejected','certificate_generated','delivered'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
+  await pool.query('UPDATE duplicate_requests SET status=?, admin_remarks=?, rejection_reason=?, approved_by=?, approved_at=CASE WHEN ?="approved" THEN CURRENT_TIMESTAMP ELSE approved_at END WHERE id=?', [status, remarks || null, rejection_reason || null, req.user.id, status, req.params.id]);
+  await pool.query('INSERT INTO duplicate_request_timeline (duplicate_request_id, actor_id, actor_role, event_type, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)', [req.params.id, req.user.id, req.user.role, 'admin_review', `${status}:${remarks || ''}`, req.ip, req.headers['user-agent'] || 'unknown']);
+  res.json({ success: true });
+});
+
+router.get('/registrations', authenticate, requireRole('admin','upload_staff','objection_staff'), async (req, res) => {
+  const [rows] = await pool.query('SELECT * FROM registrations ORDER BY id DESC LIMIT 300');
+  res.json({ success: true, data: rows });
+});
+
+router.post('/registrations/:id/review', authenticate, requireRole('admin','upload_staff','objection_staff'), async (req, res) => {
+  const { status, remarks } = req.body;
+  if (!['approved','rejected','correction_required','pending'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
+  const [rows] = await pool.query('SELECT * FROM registrations WHERE id=?', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+  await pool.query('UPDATE registrations SET status=?, remarks=? WHERE id=?', [status, remarks || null, req.params.id]);
+  if (status === 'approved') {
+    await pool.query('INSERT OR IGNORE INTO applications (application_no, name, district, mobile, status) VALUES (?, ?, ?, ?, ?)', [rows[0].application_no, rows[0].full_name, rows[0].state || '', rows[0].mobile, 'pending']);
+  }
+  res.json({ success: true });
+});
+
 module.exports = router;
