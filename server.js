@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const cron = require('node-cron');
@@ -17,6 +18,7 @@ const candidateRoutes = require('./routes/candidate');
 const certificateRoutes = require('./routes/certificate');
 const objectionRoutes = require('./routes/objection');
 const superadminRoutes = require('./routes/superadmin');
+const { attachTraceId, notFoundHandler, errorHandler } = require('./middleware/errors');
 
 const app = express();
 
@@ -31,6 +33,19 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(attachTraceId);
+
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.OTP_RATE_LIMIT_MAX || '6', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error_code: 'OTP_RATE_LIMITED',
+    message: 'Too many OTP requests. Try again later.'
+  }
+});
 
 // Super Admin hidden routes — declared BEFORE static middleware so the
 // public/superadmin/ directory never causes a static redirect to /superadmin/
@@ -43,6 +58,7 @@ app.use('/images', express.static(path.join(__dirname, 'public', 'image')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
+app.use('/api/auth/request-otp', otpLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
@@ -76,14 +92,14 @@ app.get('/admin/:page', (req, res, next) => {
 app.get('/staff', (req, res) => res.sendFile(path.join(__dirname, 'public', 'staff.html')));
 app.get('/candidate', (req, res) => res.sendFile(path.join(__dirname, 'public', 'candidate.html')));
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ success: false, message: err.message || 'Server error' });
-});
+app.get('/healthz', (req, res) => res.status(200).json({ success: true, status: 'ok', trace_id: req.traceId }));
+app.get('/readyz', (req, res) => res.status(200).json({ success: true, status: 'ready', trace_id: req.traceId }));
+
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Validate required environment variables before startup
-const requiredEnv = ['DB_HOST', 'DB_USER', 'DB_NAME', 'JWT_SECRET'];
+const requiredEnv = ['JWT_SECRET'];
 const missingEnv = requiredEnv.filter(key => !process.env[key]);
 if (missingEnv.length > 0) {
   console.error('❌ Missing required environment variables:', missingEnv.join(', '));
