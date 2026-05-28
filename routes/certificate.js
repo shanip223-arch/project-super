@@ -8,11 +8,13 @@ const { requireRole } = require('../middleware/roleCheck');
 const { logAction } = require('../utils/logger');
 const { uuidv7, hashFile, buildVerificationPayload, verifyPayloadSignature } = require('../utils/certificateAuthority');
 const { appendAudit } = require('../utils/immutableAudit');
+const { validateUploadFile } = require('../utils/fileValidation');
+const { enqueue } = require('../utils/queue');
 
 const router = express.Router();
 
 const storage = multer.diskStorage({
-  destination: 'uploads/certificates/',
+  destination: 'uploads/temp/',
   filename: (req, file, cb) => {
     const unique = Date.now() + '_' + Math.round(Math.random() * 1e9);
     cb(null, unique + path.extname(file.originalname));
@@ -30,8 +32,14 @@ router.post('/upload', authenticate, requireRole('upload_staff', 'admin'), uploa
     if (!apps.length) return res.status(404).json({ success: false, message: 'Application not found' });
     if (!apps[0].upload_enabled) return res.status(403).json({ success: false, message: 'Upload disabled for this application' });
 
-    await pool.query(
-      "INSERT INTO certificates (application_no, file_path, uploaded_by, status) VALUES (?, ?, ?, 'verified')",
+    const validation = validateUploadFile(req.file.path, req.file.originalname, req.file.mimetype);
+    if (!validation.ok) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ success: false, error_code: validation.code, message: 'Uploaded file failed security validation.', trace_id: req.traceId });
+    }
+
+    const [insert] = await pool.query(
+      "INSERT INTO certificates (application_no, file_path, uploaded_by, status, security_status) VALUES (?, ?, ?, 'pending_scan', 'pending_scan')",
       [application_no, req.file.path, req.user.id]
     );
     const certificate_id = uuidv7();
@@ -41,10 +49,10 @@ router.post('/upload', authenticate, requireRole('upload_staff', 'admin'), uploa
     await pool.query('INSERT INTO certificate_verifications (certificate_id, application_no, certificate_hash, verification_signature, verification_url, immutable_record_hash) VALUES (?, ?, ?, ?, ?, ?)', [certificate_id, application_no, certificate_hash, signature, verification_url, signature]);
     await pool.query('INSERT INTO verification_audit (certificate_id, action, trace_id, ip_address, user_agent, details) VALUES (?, ?, ?, ?, ?, ?)', [certificate_id, 'CERTIFICATE_ISSUED', req.traceId || null, req.ip, req.headers['user-agent'] || null, JSON.stringify(payload)]);
     await appendAudit('CERTIFICATE_ISSUED', { certificate_id, application_no, verification_url }, { actorId: req.user.id, actorRole: req.user.role, traceId: req.traceId, ip: req.ip, userAgent: req.headers['user-agent'] });
-    await pool.query("UPDATE applications SET status='uploaded' WHERE application_no=?", [application_no]);
+    await enqueue('malware_scan', { async_job_id: null, certificate_id: insert.insertId, file_path: req.file.path, application_no }, { traceId: req.traceId, dedupKey: `malware:${insert.insertId}` });
 
-    await logAction(req.user.id, req.user.role, 'CERT_UPLOAD', `Certificate uploaded for ${application_no}`, req.ip);
-    res.json({ success: true, message: 'Certificate uploaded' });
+    await logAction(req.user.id, req.user.role, 'CERT_UPLOAD', `Certificate uploaded for ${application_no} (pending scan)`, req.ip);
+    res.json({ success: true, message: 'Certificate received and queued for malware scan', status: 'pending_scan', trace_id: req.traceId });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -66,7 +74,7 @@ router.post('/bulk-upload', authenticate, requireRole('upload_staff', 'admin'), 
         continue;
       }
       await pool.query(
-        "INSERT INTO certificates (application_no, file_path, uploaded_by, status) VALUES (?, ?, ?, 'verified')",
+        "INSERT INTO certificates (application_no, file_path, uploaded_by, status, security_status) VALUES (?, ?, ?, 'pending_scan', 'pending_scan')",
         [application_no, file.path, req.user.id]
       );
       await pool.query("UPDATE applications SET status='uploaded' WHERE application_no=?", [application_no]);

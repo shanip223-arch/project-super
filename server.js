@@ -29,7 +29,7 @@ const opsRoutes = require('./routes/ops');
 const app = express();
 
 // Create required directories
-const dirs = ['uploads/temp', 'uploads/verified', 'uploads/certificates', 'uploads/objection_docs', 'backups'];
+const dirs = ['uploads/temp', 'uploads/verified', 'uploads/certificates', 'uploads/objection_docs', 'uploads/quarantine', 'backups'];
 dirs.forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
@@ -180,7 +180,9 @@ initDatabase().then(() => initSuperAdminDb()).then(() => {
         audit_exports: async payload => emit('info', 'audit.exported', payload),
         otp_retries: async payload => emit('info', 'otp.retry', payload),
         bulk_uploads: async payload => emit('info', 'bulk.upload', payload),
-        duplicate_processing: async payload => emit('info', 'duplicate.processing', payload)
+        duplicate_processing: async payload => emit('info', 'duplicate.processing', payload),
+        malware_scan: async payload => emit('info', 'malware.scan.fallback', payload),
+        cleanup: async payload => emit('info', 'cleanup.run', payload)
       });
     } catch (e) {
       await captureMetric('worker_crash', 'error', { error: e.message });
