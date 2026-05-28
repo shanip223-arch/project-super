@@ -106,7 +106,7 @@ function renderDash() {
           <b>2 din ke andar required documents submit karein.</b> 
           Agar 2 din mein clear nahi karein to objection clearance ke liye <b>payment fee lagegi.</b>
         </p>
-        <button class="btn btn-danger" onclick="setPage('objections', document.querySelector('.nav-item:nth-child(3)'))">
+        <button class="btn btn-danger" data-action="goto-objections">
           🔴 Clear Objection Now
         </button>
       </div>
@@ -124,7 +124,7 @@ function renderDash() {
     <div class="card">
       <h3>Certificate Status</h3>
       <p style="font-size: 16px;">${cert ? '✅ Available - ' + cert.status.toUpperCase() : '⏳ Not yet issued'}</p>
-      ${cert && cert.status === 'verified' ? '<br><button class="btn btn-success" onclick="downloadCert()">⬇️ Download Certificate</button>' : ''}
+      ${cert && cert.status === 'verified' ? '<br><button class="btn btn-success" data-action="download-cert">⬇️ Download Certificate</button>' : ''}
     </div>
   `;
 }
@@ -143,7 +143,7 @@ function renderCorrection() {
       </select>
       <label>Correct Value</label>
       <input type="text" id="corrValue" placeholder="Enter the correct detail...">
-      <button class="btn btn-primary" onclick="submitCorrection()" style="margin-top:15px;">Submit Request</button>
+      <button class="btn btn-primary" data-action="submit-correction" style="margin-top:15px;">Submit Request</button>
     </div>
   `;
 }
@@ -193,7 +193,7 @@ function renderObjections() {
               <span class="tag ${o.status}" style="font-size:13px;">${o.status.replace('_',' ').toUpperCase()}</span>
               <span style="font-size:13px; color:#666; margin-left:10px;">${new Date(o.created_at).toLocaleDateString('en-IN')}</span>
             </div>
-            ${o.status === 'open' ? `<button class="btn btn-danger btn-sm" onclick="showClearForm(${o.id})">🔴 Clear Objection Now</button>` : ''}
+            ${o.status === 'open' ? `<button class="btn btn-danger btn-sm" data-action="toggle-clear-form" data-objection-id="${o.id}">🔴 Clear Objection Now</button>` : ''}
           </div>
 
           ${docs.length ? `
@@ -217,8 +217,8 @@ function renderObjections() {
                 <input type="file" data-doc="${d}" class="clear-file-${o.id}" accept="${isImage ? 'image/jpeg' : 'application/pdf'}" style="margin:0;">
               </div>`;
             }).join('') : `<input type="file" class="clear-file-${o.id}" multiple accept="application/pdf,image/jpeg" style="margin:0;">`}
-            <button class="btn btn-primary" onclick="submitClear(${o.id})" style="margin-top:10px;">Submit Documents</button>
-            <button class="btn" onclick="document.getElementById('clearForm_${o.id}').style.display='none'" style="margin-left:8px;">Cancel</button>
+            <button class="btn btn-primary" data-action="submit-clear" data-objection-id="${o.id}" style="margin-top:10px;">Submit Documents</button>
+            <button class="btn" data-action="hide-clear-form" data-objection-id="${o.id}" style="margin-left:8px;">Cancel</button>
           </div>
         </div>`;
       }).join('') : '<p style="color:var(--text-muted)">Koi objection nahi hai. 🎉</p>'}
@@ -289,7 +289,7 @@ function buildCandidateObjectionBody(objection, theme) {
           const isImage = d === 'Passport Size Photograph' || d === 'Signature';
           return `<div class="workflow-upload-row"><label>${escapeHtml(d)} ${isImage ? '(JPG only)' : '(PDF only)'}</label><input type="file" data-doc="${escapeHtml(d)}" class="clear-file-${objection.id}" accept="${isImage ? 'image/jpeg' : 'application/pdf'}"></div>`;
         }).join('') : `<div class="workflow-upload-row"><label>Corrected Documents</label><input type="file" class="clear-file-${objection.id}" multiple accept="application/pdf,image/jpeg,image/png"></div>`}
-        <div class="workflow-actions"><button class="btn btn-danger" onclick="submitClear(${objection.id})">Submit Objection Response</button></div>
+        <div class="workflow-actions"><button class="btn btn-danger" data-action="submit-clear" data-objection-id="${objection.id}">Submit Objection Response</button></div>
       </div>` : `
       <div class="workflow-section">
         <h4>Review Status</h4>
@@ -343,3 +343,45 @@ async function downloadCert() {
 
 // Initial load
 load();
+function bindCandidateEventHandlers() {
+  if (window.__candidateEventsBound) return;
+  window.__candidateEventsBound = true;
+  document.querySelectorAll('.candidate-sidebar .nav-item[data-page]').forEach((item) => {
+    item.addEventListener('click', () => setPage(item.dataset.page, item));
+  });
+  const logoutButton = document.querySelector('.candidate-sidebar .nav-item.logout');
+  if (logoutButton) logoutButton.addEventListener('click', logout);
+
+  const content = document.getElementById('content');
+  if (!content) return;
+  content.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-action]');
+    if (!target) return;
+    const objectionId = Number(target.dataset.objectionId || 0);
+    switch (target.dataset.action) {
+      case 'goto-objections': {
+        const nav = document.querySelector('.candidate-sidebar .nav-item[data-page="objections"]');
+        if (nav) setPage('objections', nav);
+        break;
+      }
+      case 'download-cert': downloadCert(); break;
+      case 'submit-correction': submitCorrection(); break;
+      case 'toggle-clear-form': if (objectionId) showClearForm(objectionId); break;
+      case 'submit-clear': if (objectionId) submitClear(objectionId); break;
+      case 'hide-clear-form': {
+        const form = document.getElementById(`clearForm_${objectionId}`);
+        if (form) form.style.display = 'none';
+        break;
+      }
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    bindCandidateEventHandlers();
+    load();
+  } catch (err) {
+    console.error('[candidate.init.error]', err);
+  }
+});
