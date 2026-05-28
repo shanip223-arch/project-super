@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 const pool = require('../config/db');
 const { emit, captureMetric } = require('./structuredLogger');
+const { scanWithTelemetry } = require('./malwareScanner');
+const fs = require('fs');
+const path = require('path');
 const { connection } = require('./queue');
 
 const hasBull = !!connection;
@@ -44,11 +47,19 @@ function createProcessor(queueName) {
       await pool.query('UPDATE async_jobs SET status=?, worker_name=?, started_at=CURRENT_TIMESTAMP WHERE id=?', ['processing', queueName, jobId]);
       await bullJob.updateProgress(10);
       if (queueName === 'malware_scan' && payload.file_path) {
-        const suspicious = /\.exe$|\.bat$/i.test(payload.file_path);
-        if (suspicious) {
-          await pool.query('INSERT INTO scan_quarantine(original_path, quarantine_path, reason, trace_id) VALUES (?, ?, ?, ?)', [payload.file_path, `uploads/quarantine/${Date.now()}_${payload.file_path.split('/').pop()}`, 'signature_match', traceId]);
+        await bullJob.updateProgress(35);
+        const result = await scanWithTelemetry(payload.file_path, traceId);
+        const infected = result.infected || result.verdict === 'infected';
+        const certId = payload.certificate_id || null;
+        await pool.query('INSERT INTO malware_scan_events(certificate_id, file_path, status, verdict, infected, retry_attempt, duration_ms, trace_id, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [certId, payload.file_path, infected ? 'quarantined' : 'completed', result.verdict, infected ? 1 : 0, bullJob.attemptsMade || 0, result.durationMs || 0, traceId, JSON.stringify(result)]);
+        if (infected) {
+          const quarantinePath = path.join('uploads', 'quarantine', `${Date.now()}_${path.basename(payload.file_path)}`);
+          if (fs.existsSync(payload.file_path)) fs.renameSync(payload.file_path, quarantinePath);
+          await pool.query('INSERT INTO scan_quarantine(original_path, quarantine_path, reason, trace_id) VALUES (?, ?, ?, ?)', [payload.file_path, quarantinePath, result.signature || 'malware_detected', traceId]);
+          if (certId) await pool.query("UPDATE certificates SET status='rejected', security_status='quarantined', quarantined_at=CURRENT_TIMESTAMP, scan_trace_id=? WHERE id=?", [traceId, certId]);
           throw new Error('malware_detected');
         }
+        if (certId) await pool.query("UPDATE certificates SET status='verified', security_status='clean', scan_trace_id=? WHERE id=?", [traceId, certId]);
       }
       await bullJob.updateProgress(70);
       await pool.query('UPDATE async_jobs SET status=?, progress=?, completed_at=CURRENT_TIMESTAMP, latency_ms=? WHERE id=?', ['completed', 100, Date.now() - start, jobId]);

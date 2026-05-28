@@ -292,6 +292,24 @@ async function initDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  
+  await pool.query(`CREATE TABLE IF NOT EXISTS malware_scan_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    certificate_id INTEGER,
+    file_path TEXT,
+    status TEXT,
+    verdict TEXT,
+    infected INTEGER DEFAULT 0,
+    retry_attempt INTEGER DEFAULT 0,
+    duration_ms INTEGER DEFAULT 0,
+    trace_id TEXT,
+    metadata TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  try { await pool.query("ALTER TABLE certificates ADD COLUMN security_status TEXT DEFAULT 'pending_scan'"); } catch(e) {}
+  try { await pool.query("ALTER TABLE certificates ADD COLUMN quarantined_at DATETIME"); } catch(e) {}
+  try { await pool.query("ALTER TABLE certificates ADD COLUMN scan_trace_id TEXT"); } catch(e) {}
+
   await pool.query(`CREATE TABLE IF NOT EXISTS storage_objects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
