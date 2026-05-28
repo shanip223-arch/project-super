@@ -8,6 +8,7 @@ const { requireRole } = require('../middleware/roleCheck');
 const { requireNoActiveObjection } = require('../middleware/objectionLock');
 const { AppError, asyncHandler } = require('../middleware/errors');
 const rateLimit = require('express-rate-limit');
+const { emit, captureMetric } = require('../utils/structuredLogger');
 const {
   ensurePrivateDirs,
   secureFileName,
@@ -114,6 +115,40 @@ router.post('/duplicate-apply', authenticate, requireRole('candidate'), duplicat
     if (fs.existsSync(finalPhotoPath)) fs.unlink(finalPhotoPath, () => {});
     throw err;
   }
+}));
+
+
+router.get('/notices', asyncHandler(async (req, res) => {
+  const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10), 1), 100);
+  const offset = (page - 1) * limit;
+  const status = String(req.query.status || 'active').toLowerCase();
+
+  let where = "WHERE target_audience IN ('public','candidate')";
+  const params = [];
+  if (status === 'active') {
+    where += ' AND is_active=1';
+  } else if (status === 'inactive') {
+    where += ' AND is_active=0';
+  }
+
+  const [rows] = await pool.query(
+    `SELECT id, title, content, file_path, target_audience, is_active, created_at
+     FROM notices ${where}
+     ORDER BY id DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
+  );
+  const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total FROM notices ${where}`, params);
+
+  await captureMetric('candidate_notices_fetch', 'ok', { page, limit, status, count: rows.length }, req.traceId);
+  emit('info', 'candidate.notices.fetch', { trace_id: req.traceId, page, limit, status, count: rows.length });
+
+  res.json({
+    success: true,
+    data: rows || [],
+    pagination: { page, limit, total: countRow.total, has_next: offset + rows.length < countRow.total },
+    trace_id: req.traceId
+  });
 }));
 
 router.get('/duplicate-requests', authenticate, requireRole('candidate'), asyncHandler(async (req, res) => {

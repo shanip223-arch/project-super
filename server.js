@@ -36,7 +36,7 @@ dirs.forEach(dir => {
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], imgSrc: ["'self'", 'data:'], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"] } },
+  contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], imgSrc: ["'self'", 'data:'], scriptSrc: ["'self'"], scriptSrcAttr: ["'none'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'], reportUri: ['/api/ops/csp-report'] } },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
 }));
 app.use(cors());
@@ -113,6 +113,14 @@ app.get('/healthz', async (req, res) => {
   await captureMetric('runtime_memory', 'ok', { rss: mem.rss, heapUsed: mem.heapUsed }, req.traceId);
   res.status(200).json({ success: true, status: 'ok', trace_id: req.traceId, memory: { rss: mem.rss, heap_used: mem.heapUsed } });
 });
+
+app.post('/api/ops/csp-report', express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'] }), async (req, res) => {
+  const report = req.body && (req.body['csp-report'] || req.body);
+  await captureMetric('csp_violation', 'warn', { report }, req.traceId);
+  emit('warn', 'security.csp.violation', { trace_id: req.traceId, report });
+  res.status(204).end();
+});
+
 app.get('/readyz', async (req, res) => {
   const checks = { redis: hasRedis() ? 'configured' : 'disabled', db: 'unknown', storage: 'unknown' };
   try { await require('./config/db').query('SELECT 1'); checks.db = 'ready'; } catch (e) { checks.db = 'down'; }
